@@ -6,7 +6,7 @@ import { DEFAULT_LANGUAGE, dictionaryFrom, language, t, useLanguage } from '../i
 import * as act from '../model/activity'
 import { shareOf } from '../model/shared'
 import { shellAdded, shellFrom, shellStopped, SHELLS_MAX } from '../model/shells'
-import { ciFrom, gitFrom, loopsFrom, offsetFrom, peersFrom, prFrom, remember } from '../model/signals'
+import { ciFrom, gitFrom, loopsFrom, observed, offsetFrom, peersFrom, prFrom, remember } from '../model/signals'
 import { bandLines, budgetNotices, noticesOf, PALETTE, THEME, type Action, type GaugePart, type SpinnerPart } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { gaugeCells } from '../render/gauge'
@@ -33,6 +33,7 @@ const pr = atom({ plugin: 'binnacle', key: 'pr' } as const, null)
 const peers = atom({ plugin: 'binnacle', key: 'peers' } as const, [])
 const loops = atom({ plugin: 'binnacle', key: 'loops' } as const, [])
 const history = atom({ plugin: 'binnacle', key: 'history' } as const, {})
+const readings = atom({ plugin: 'binnacle', key: 'readings' } as const, {})
 const mode = atom({ plugin: 'binnacle', key: 'mode' } as const, 'full')
 const activity = atom({ plugin: 'binnacle', key: 'activity' } as const, act.EMPTY)
 const shells = atom({ plugin: 'binnacle', key: 'shells' } as const, [])
@@ -209,6 +210,12 @@ async function recordLimits($: Engine, limits: Meter[]): Promise<void> {
   })
 }
 
+/** Every measure is a reading of the windows, moved or not: tools/quota.ts says how old it is. */
+async function recordReadings($: Engine, limits: Meter[]): Promise<void> {
+  const now = await $.clock.now()
+  await update($, readings, before => observed(before, limits, now))
+}
+
 function snapshotOf(e: { context: { percent?: number; tokens?: number; window: number }; rateLimits: readonly { kind: string; percentUsed: number; resetsAt?: string }[]; cost?: { usd: number } }): Snapshot {
   return {
     percent: e.context.percent,
@@ -230,13 +237,14 @@ async function sharedNow($: Engine, now: number): Promise<Shared> {
     peers: await read($, peers),
     loops: (await read($, loops)).length,
     history: await read($, history),
+    readings: await read($, readings),
     shells: await read($, shells),
     language: language(),
     band: isBandDrawn && (await read($, band)),
   })
 }
 
-// tools/liveness.ts and tools/statusline.ts read this file; it is written only when its content changed.
+// tools/liveness.ts, tools/statusline.ts and tools/quota.ts read this file; it is written only when its content changed.
 async function publish($: Engine): Promise<void> {
   isDirty = false
   const body = JSON.stringify(await sharedNow($, await $.clock.now()))
@@ -425,6 +433,7 @@ export const register: Register = (on, options) => {
     const measured = snapshotOf(usage)
     await update($, snapshot, () => measured)
     await recordLimits($, measured.limits)
+    await recordReadings($, measured.limits)
 
     // Every source reads after the session is ready, one after another, never in front of it.
     quietly(
@@ -457,6 +466,7 @@ export const register: Register = (on, options) => {
     const measured = snapshotOf(e)
     await update($, snapshot, () => measured)
     if (e.changed.includes('rateLimits')) await recordLimits($, measured.limits)
+    await recordReadings($, measured.limits)
     isDirty = true
     return next(e)
   })

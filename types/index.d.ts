@@ -42,6 +42,13 @@ export type Peer = {
 /** One reading of a rate-limit window, to project when it fills. */
 export type Sample = { t: number; p: number }
 
+/**
+ * A rate-limit window as last read: the share used, when it resets (milliseconds; absent when the
+ * engine gave no time) and when it was read (`seenAt`, refreshed at most once a minute while the
+ * figures stand still).
+ */
+export type Reading = { percent: number; resetsAt?: number; seenAt: number }
+
 export type Mode = 'full' | 'compact' | 'hidden'
 
 export type Outcome = 'running' | 'ok' | 'error' | 'denied'
@@ -171,6 +178,8 @@ export type Shared = {
   crowd?: number
   loops?: number
   history?: Record<string, Sample[]>
+  /** Each rate-limit window's last reading, by kind; tools/quota.ts reads it. Absent before any. */
+  limits?: Record<string, Reading>
   /** `doing`: the main loop's running call in words, as an agent's `doing.text`; `previous` its last ended one. */
   turn?: { startedAt: number; actions: number; denials: number; tool: string | null; doing?: string; previous?: string } | null
   last?: LastTurn | null
@@ -194,6 +203,7 @@ declare module 'claude-code' {
       peers: Peer[]
       loops: number[]
       history: Record<string, Sample[]>
+      readings: Record<string, Reading>
       mode: Mode
       activity: Activity
       shells: Shell[]

@@ -2,7 +2,7 @@
 // the engine follows $ only into functions of the module that holds the hooks.
 
 import { t } from '../i18n'
-import type { Ci, Git, Peer, Pr, Sample } from '../types'
+import type { Ci, Git, Meter, Peer, Pr, Reading, Sample } from '../types'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -140,15 +140,44 @@ export function remember(samples: Sample[], t: number, p: number): Sample[] {
   return [...kept, { t, p }].slice(-40)
 }
 
-// Milliseconds until the window fills at the pace of the last hour; null when it is not filling.
-export function untilFull(samples: Sample[]): number | null {
+/**
+ * Points a window gained per hour over the last hour of readings: from the oldest reading in the
+ * hour before the newest to the newest. Null with less than ten minutes between them.
+ */
+export function paceOf(samples: readonly Sample[]): number | null {
   const last = samples.at(-1)
   if (last === undefined) return null
   const first = samples.find(s => last.t - s.t <= HOUR)
   if (first === undefined || last.t - first.t < 10 * MINUTE) return null
+  return ((last.p - first.p) / (last.t - first.t)) * HOUR
+}
 
-  const rate = (last.p - first.p) / (last.t - first.t)
-  return rate > 0 ? (100 - last.p) / rate : null
+// Milliseconds until the window fills at the pace of the last hour; null when it is not filling.
+export function untilFull(samples: Sample[]): number | null {
+  const last = samples.at(-1)
+  const pace = paceOf(samples)
+  if (last === undefined || pace === null || pace <= 0) return null
+  return ((100 - last.p) / pace) * HOUR
+}
+
+/**
+ * Each window's last reading after the engine reported `limits` at `now`. While the figures stand
+ * still, the time of the reading moves at most once a minute, so the state file is not rewritten on
+ * every measure. A window the engine stopped reporting keeps its last reading and its time; an
+ * empty report (no reading yet, or no subscription) changes nothing.
+ */
+export function observed(before: Readonly<Record<string, Reading>>, limits: readonly Meter[], now: number): Record<string, Reading> {
+  const read = limits
+    .filter(l => Number.isFinite(l.percent))
+    .map(l => ({ kind: l.kind, percent: l.percent, resetsAt: l.resetsAt !== undefined && Number.isFinite(l.resetsAt) ? l.resetsAt : undefined }))
+  const isNews = read.some(l => {
+    const known = before[l.kind]
+    return known === undefined || known.percent !== l.percent || known.resetsAt !== l.resetsAt || now - known.seenAt >= MINUTE
+  })
+  if (!isNews) return before
+  const next = { ...before }
+  for (const l of read) next[l.kind] = { percent: l.percent, ...(l.resetsAt === undefined ? {} : { resetsAt: l.resetsAt }), seenAt: now }
+  return next
 }
 
 /** Only what `untilFull` reads, for the status line's file. */

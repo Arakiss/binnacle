@@ -1,8 +1,8 @@
-// The session's facts the status line draws from, also written to ./state for tools/liveness.ts
-// and tools/statusline.ts: small, and only what the status line draws (the pane reads the values
-// themselves).
+// The session's facts the status line draws from, also written to ./state for tools/liveness.ts,
+// tools/statusline.ts and tools/quota.ts: small, and only what those draw (the pane reads the
+// values themselves).
 
-import type { Activity, AgentPulse, Call, Ci, Git, Mode, Peer, Sample, Shared, Shell } from '../types'
+import type { Activity, AgentPulse, Call, Ci, Git, Mode, Peer, Reading, Sample, Shared, Shell } from '../types'
 import { activeAgents, currentCall, previousCall } from './activity'
 import { crowdOf, recent } from './signals'
 
@@ -25,6 +25,8 @@ export type Values = {
   peers: readonly Peer[]
   loops: number
   history: Record<string, Sample[]>
+  /** Each rate-limit window's last reading, by kind. */
+  readings?: Readonly<Record<string, Reading>>
   shells?: readonly Shell[]
   /** The language the words are in. */
   language?: string
@@ -48,6 +50,7 @@ export function shareOf(v: Values): Shared {
     crowd: crowdOf(v.peers, v.git?.root),
     loops: v.loops,
     history: recent(v.history, v.now),
+    ...(v.readings && Object.keys(v.readings).length > 0 ? { limits: { ...v.readings } } : {}),
     turn: a.turn && { startedAt: a.turn.startedAt, actions: a.turn.actions, denials: a.turn.denials, tool: call?.tool ?? null, ...(doing ? { doing } : {}), ...(previous ? { previous } : {}) },
     last: a.last,
     agents,

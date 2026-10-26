@@ -171,6 +171,19 @@ test('the mod publishes git, CI, crowd and loops for the status line, and nothin
   expect(JSON.stringify(state()).length).toBeLessThan(8 * 1024)
 })
 
+test('the mod publishes each rate-limit window as last read, for tools/quota.ts', { options: OPTIONS }, async ($, on) => {
+  const state = published(on)
+  const clock = engine(on)
+  const started = clock.now()
+  await $.session.start(SURFACE)
+  await clock.advance(2_000)
+
+  expect(state()?.limits).toEqual({
+    five_hour: { percent: 62, resetsAt: started + 7_200_000, seenAt: started },
+    seven_day: { percent: 9, seenAt: started },
+  })
+})
+
 test('a turn with tool calls reaches the status line and the pane', { options: OPTIONS }, async ($, on) => {
   const state = published(on)
   const clock = engine(on)
