@@ -358,9 +358,29 @@ async function announce($: Engine): Promise<void> {
   }
 }
 
-const MODES: Record<string, Mode> = { full: 'full', compact: 'compact', hidden: 'hidden' }
+/**
+ * Whether `word`, as typed after /binnacle, is one of the English `words` or one of the words the
+ * active dictionary gives for it (`said`, alternatives split by `|`: "línea|linea"). English always
+ * works, so a habit or a README example keeps working whatever the language.
+ */
+function isWord(word: string, words: readonly string[], said: string): boolean {
+  return words.includes(word) || said.toLowerCase().split('|').some(alternative => alternative.trim() === word)
+}
 
-const SWITCH: Record<string, boolean> = { on: true, yes: true, off: false, no: false }
+/** The status line's mode a word names: "full", "compact", "hidden", or the active language's. */
+function modeOf(word: string): Mode | undefined {
+  if (isWord(word, ['full'], t('command.word.full'))) return 'full'
+  if (isWord(word, ['compact'], t('command.word.compact'))) return 'compact'
+  if (isWord(word, ['hidden'], t('command.word.hidden'))) return 'hidden'
+  return undefined
+}
+
+/** The switch a word names: "on"/"yes", "off"/"no", or the active language's. */
+function switchOf(word: string): boolean | undefined {
+  if (isWord(word, ['on', 'yes'], t('command.word.on'))) return true
+  if (isWord(word, ['off', 'no'], t('command.word.off'))) return false
+  return undefined
+}
 
 /** The command's own words, in the active language. */
 const help = () => t('command.help')
@@ -443,8 +463,8 @@ export const register: Register = (on, options) => {
     if (first === 'reap') return { text: await reapLoops($) }
 
     // The band above the prompt, or the status line alone; `/binnacle band` alone flips it.
-    if (first === 'band') {
-      const isOn = second === '' ? !(await read($, band)) : SWITCH[second]
+    if (isWord(first, ['band'], t('command.word.band'))) {
+      const isOn = second === '' ? !(await read($, band)) : switchOf(second)
       if (isOn === undefined) return { text: help() }
       await update($, band, () => isOn)
       if (!isOn) bandDrawn(false)
@@ -455,15 +475,15 @@ export const register: Register = (on, options) => {
     }
 
     // Whether a stalled agent wakes the main loop with a note; `/binnacle wake` alone flips it.
-    if (first === 'wake') {
-      const isOn = second === '' ? !(await read($, wake)) : SWITCH[second]
+    if (isWord(first, ['wake'], t('command.word.wake'))) {
+      const isOn = second === '' ? !(await read($, wake)) : switchOf(second)
       if (isOn === undefined) return { text: help() }
       await update($, wake, () => isOn)
       return { text: isOn ? t('command.wakeOn') : t('command.wakeOff') }
     }
 
     // `/binnacle line compact`, and `/binnacle compact` alike.
-    const chosen = MODES[first === 'line' ? second : first]
+    const chosen = modeOf(isWord(first, ['line'], t('command.word.line')) ? second : first)
     if (chosen === undefined) return { text: help() }
     await update($, mode, () => chosen)
     await publish($)

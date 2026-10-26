@@ -1,6 +1,8 @@
 import { describe, expect, mock, test, type TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { t, useLanguage } from '../i18n'
+import { DICTIONARIES } from '../i18n/dictionaries'
 import { drawn as layOut } from '../tools/draw'
 
 /** The options a user who runs every feature would set: a sessions listing, the Codex loop watch, a quiet hint. */
@@ -372,6 +374,57 @@ test('language es speaks Spanish everywhere, and a dictionary on disk overrides 
   expect(await pane.find({ type: 'Text', text: /CI falla \(1 de 3\)/ })).toBeDefined()
   await pane.unmount()
   expect(await $.command.run({ command: 'binnacle', args: '', ...COMPOSER })).toEqual(expect.objectContaining({ text: 'panel abierto; /binnacle lo cierra' }))
+})
+
+test("the command takes the active language's words, and English ones still", { options: { ...OPTIONS, language: 'es' } }, async ($, on) => {
+  const state = published(on)
+  engine(on)
+  await $.session.start(SURFACE)
+  const run = (args: string) => $.command.run({ command: 'binnacle', args, ...COMPOSER })
+  // What the user types and what the command answers, both from the Spanish dictionary.
+  const words = (key: string) => (DICTIONARIES.es?.[key] ?? '').split('|')
+  const first = (key: string) => words(key)[0] ?? ''
+  const said = (() => {
+    try {
+      useLanguage('es')
+      return { compact: t('command.line', { mode: t('mode.compact') }), bandOn: t('command.bandOn'), bandOff: t('command.bandOff'), wakeOn: t('command.wakeOn'), wakeOff: t('command.wakeOff'), help: t('command.help') }
+    } finally {
+      useLanguage('en')
+    }
+  })()
+
+  // Every spelling the dictionary gives counts: "línea" and "linea".
+  for (const line of words('command.word.line')) {
+    expect(await run(`${line} ${first('command.word.compact')}`)).toEqual(expect.objectContaining({ text: said.compact }))
+    expect(state()).toEqual(expect.objectContaining({ mode: 'compact' }))
+    await run(`${line} ${first('command.word.full')}`)
+    expect(state()).toEqual(expect.objectContaining({ mode: 'full' }))
+  }
+  await run(first('command.word.hidden'))
+  expect(state()).toEqual(expect.objectContaining({ mode: 'hidden' }))
+
+  const band = first('command.word.band')
+  expect(await run(`${band} ${first('command.word.off')}`)).toEqual(expect.objectContaining({ text: said.bandOff }))
+  for (const yes of words('command.word.on')) expect(await run(`${band} ${yes}`)).toEqual(expect.objectContaining({ text: said.bandOn }))
+  const wake = first('command.word.wake')
+  expect(await run(`${wake} ${first('command.word.off')}`)).toEqual(expect.objectContaining({ text: said.wakeOff }))
+  expect(await run(wake)).toEqual(expect.objectContaining({ text: said.wakeOn }))
+
+  // English works whatever the language.
+  expect(await run('line compact')).toEqual(expect.objectContaining({ text: said.compact }))
+  expect(await run('wake off')).toEqual(expect.objectContaining({ text: said.wakeOff }))
+  expect(await run('band yes')).toEqual(expect.objectContaining({ text: said.bandOn }))
+  // A word of neither gets the help, in the active language.
+  expect(await run(`${band} maybe`)).toEqual(expect.objectContaining({ text: said.help }))
+})
+
+test("an English session does not take another language's command words",{ options: OPTIONS }, async ($, on) => {
+  const state = published(on)
+  engine(on)
+  await $.session.start(SURFACE)
+  const word = (key: string) => (DICTIONARIES.es?.[key] ?? '').split('|')[0] ?? ''
+  expect(await $.command.run({ command: 'binnacle', args: `${word('command.word.line')} ${word('command.word.compact')}`, ...COMPOSER })).toEqual(expect.objectContaining({ text: t('command.help') }))
+  expect(state()?.mode ?? 'full').toBe('full')
 })
 
 test('with no options the other sessions are never listed and no Codex loop is looked for', async ($, on) => {

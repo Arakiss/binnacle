@@ -82,6 +82,9 @@ the prompt. binnacle keeps the whole crew on screen while you type:
 | `/binnacle wake on\|off` | Whether a stalled agent wakes the main loop with a note |
 | `/binnacle reap` | Ends orphaned Codex loops (with `watchCodexLoops` on) |
 
+With a `language` set, the command also takes that dictionary's words (`/binnacle línea corta`,
+`/binnacle banda no` in Spanish); the English ones always work.
+
 ## Options
 
 Set them in the plugin's settings (`/plugin`, then binnacle):
