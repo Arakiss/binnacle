@@ -41,7 +41,7 @@ const tz = atom({ plugin: 'binnacle', key: 'tz' } as const, 0)
 const wake = atom({ plugin: 'binnacle', key: 'wake' } as const, true)
 
 /** The options the user set in the plugin's settings; `register` reads them on every load. */
-type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean }
+type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean }
 
 /** A language name safe to read as a file under i18n/: "en", "es", "pt-BR". */
 const LANGUAGE_NAME = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/
@@ -56,6 +56,8 @@ export function settingsOf(options: PluginOptions | undefined): Settings {
     peersCommand: text('peersCommand').split(/\s+/).filter(Boolean),
     watchCodexLoops: options?.watchCodexLoops === true,
     hideModeHint: options?.hideModeHint === true,
+    // On unless turned off: the summary under the prompt is how binnacle shows with the band off.
+    pinStatusLine: options?.pinStatusLine !== false,
   }
 }
 
@@ -230,10 +232,11 @@ async function sharedNow($: Engine, now: number): Promise<Shared> {
     history: await read($, history),
     shells: await read($, shells),
     language: language(),
+    band: isBandDrawn && (await read($, band)),
   })
 }
 
-// tools/liveness.ts reads this file; it is written only when its content changed.
+// tools/liveness.ts and tools/statusline.ts read this file; it is written only when its content changed.
 async function publish($: Engine): Promise<void> {
   isDirty = false
   const body = JSON.stringify(await sharedNow($, await $.clock.now()))
@@ -246,11 +249,12 @@ let pinned: string | undefined
 
 /**
  * The status line binnacle pins under the prompt while the band is off or cannot draw: the same
- * words, on one line. Cleared while the band draws, and by `/binnacle line hidden`.
+ * words, on one line. Cleared while the band draws, by `/binnacle line hidden`, and for good with
+ * the `pinStatusLine` option off, where settings.json runs tools/statusline.ts instead.
  */
 async function pinStatus($: Engine): Promise<void> {
   let text: string | undefined
-  if (!isBandDrawn) {
+  if (!isBandDrawn && settings.pinStatusLine) {
     const now = await $.clock.now()
     const s = await read($, snapshot)
     const status: Status = {
@@ -303,11 +307,15 @@ async function pruneState($: Engine): Promise<void> {
   }
 }
 
-/** Records whether the band draws the HUD; the pinned status line follows at the next tick. */
+/**
+ * Records whether the band draws the HUD; the pinned status line follows at the next tick, and
+ * tools/statusline.ts at the next publish.
+ */
 function bandDrawn(isDrawn: boolean): void {
   if (isDrawn === isBandDrawn) return
   isBandDrawn = isDrawn
   if (!isDrawn) hasBandShells = false
+  isDirty = true
 }
 
 async function isPaneOpen($: Engine): Promise<boolean> {

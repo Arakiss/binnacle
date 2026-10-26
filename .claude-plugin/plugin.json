@@ -32,6 +32,12 @@
       "title": "Hide the permission-mode hint",
       "description": "Drop the permission-mode reminder from the hint under the prompt",
       "default": false
+    },
+    "pinStatusLine": {
+      "type": "boolean",
+      "title": "Pin a summary line",
+      "description": "With the band off, pin a one-line summary under the prompt; turn it off when settings.json runs tools/statusline.ts instead",
+      "default": true
     }
   }
 }

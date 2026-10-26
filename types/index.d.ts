@@ -180,6 +180,8 @@ export type Shared = {
   workflows?: Record<string, string>
   /** The language the words are in, so tools/liveness.ts writes in the same one. */
   language?: string
+  /** True while the band above the prompt draws; tools/statusline.ts then stays quiet. */
+  band?: boolean
 }
 
 declare module 'claude-code' {

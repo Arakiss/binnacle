@@ -622,4 +622,27 @@ describe('the band above the prompt', () => {
     expect((await rows(back))[1]).toMatch(/session 1h/)
     await back.unmount()
   })
+
+  test('with pinStatusLine off nothing is pinned, and the state tells tools/statusline.ts while the band draws', { options: { ...OPTIONS, pinStatusLine: false } }, async ($, on) => {
+    const state = published(on)
+    const pinned: (string | undefined)[] = []
+    on('ui.status', (_$, e) => {
+      pinned.push(e.text)
+      return { value: undefined }
+    })
+    const clock = engine(on)
+    await $.session.start(SURFACE)
+    await clock.advance(6_000)
+    expect(state()?.band).toBeUndefined()
+
+    const drawn = await $.ui.mount(band())
+    await drawn.unmount()
+    await clock.advance(2_000)
+    expect(state()?.band).toBe(true)
+
+    await $.command.run({ command: 'binnacle', args: 'band off', ...COMPOSER })
+    expect(state()?.band).toBeUndefined()
+    await clock.advance(6_000)
+    expect(pinned.filter(text => text !== undefined)).toEqual([])
+  })
 })

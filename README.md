@@ -95,6 +95,7 @@ Set them in the plugin's settings (`/plugin`, then binnacle):
 | `peersCommand` | empty | A command that lists your other sessions, so each gets a row |
 | `watchCodexLoops` | off | Flags Codex app-server wrapper loops left behind by Zentty and offers to end them |
 | `hideModeHint` | off | Drops the permission-mode reminder from the hint under the prompt |
+| `pinStatusLine` | on | With the band off, pins a one-line summary under the prompt |
 
 ### Language
 
@@ -131,6 +132,25 @@ an `intent` opens with (a capitalised word and a colon); without either, by its 
 last four characters of its id. Sessions with `liveness: "live"` get a row; a `lifecycle` other
 than `active` is left out.
 The command runs without a shell, split on spaces, every ten seconds.
+
+## A classic status line
+
+With the band off, binnacle pins one line under the prompt. For the full block instead (the
+work, the checkout and the budgets on lines of their own, in colour, a line of alerts, a row per
+background shell), point Claude Code's status line at `tools/statusline.ts` in `settings.json`
+and turn `pinStatusLine` off so the summary is not shown twice:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "bun /path/to/binnacle/tools/statusline.ts",
+  "padding": 0,
+  "refreshInterval": 1
+}
+```
+
+It prints nothing while the band draws, since the band shows the same facts; `BINNACLE_LINE=full`
+before `bun` prints it anyway.
 
 ## For scripts
 

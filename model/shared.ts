@@ -1,5 +1,6 @@
-// The session's facts the status line draws from, also written to ./state for tools/liveness.ts:
-// small, and only what the status line draws (the pane reads the values themselves).
+// The session's facts the status line draws from, also written to ./state for tools/liveness.ts
+// and tools/statusline.ts: small, and only what the status line draws (the pane reads the values
+// themselves).
 
 import type { Activity, AgentPulse, Call, Ci, Git, Mode, Peer, Sample, Shared, Shell } from '../types'
 import { activeAgents, currentCall, previousCall } from './activity'
@@ -27,6 +28,8 @@ export type Values = {
   shells?: readonly Shell[]
   /** The language the words are in. */
   language?: string
+  /** Whether the band above the prompt draws binnacle now. */
+  band?: boolean
 }
 
 export function shareOf(v: Values): Shared {
@@ -51,5 +54,6 @@ export function shareOf(v: Values): Shared {
     shells: [...(v.shells ?? [])],
     ...(Object.keys(workflows).length > 0 ? { workflows } : {}),
     ...(v.language && v.language !== 'en' ? { language: v.language } : {}),
+    ...(v.band ? { band: true } : {}),
   }
 }

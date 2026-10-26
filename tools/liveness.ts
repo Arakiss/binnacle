@@ -12,24 +12,8 @@ import { readdir, stat } from 'node:fs/promises'
 import { t, useLanguage } from '../i18n'
 import { duration } from '../render/format'
 import { exitOf, lineOf, rowsOf } from '../render/report'
-import { isOutputPath, runOf, tailStart, type Probe, type ShellRun } from '../model/shells'
-import type { Shared, Shell } from '../types'
-
-/** The last bytes of a shell's output file and its last change; null when it is gone. */
-async function probe(path: string): Promise<Probe> {
-  if (!isOutputPath(path)) return null
-  try {
-    const file = Bun.file(path)
-    if (!(await file.exists())) return null
-    return { tail: await file.slice(tailStart(file.size)).text(), mtimeMs: file.lastModified }
-  } catch {
-    return null
-  }
-}
-
-async function runsOf(shells: readonly Shell[]): Promise<ShellRun[]> {
-  return Promise.all(shells.map(async shell => runOf(shell, shell.stoppedAt === undefined ? await probe(shell.output) : null)))
-}
+import type { Shared } from '../types'
+import { runsOf } from './shell-runs'
 
 /** The state file of the session named by `prefix`, or the one written last. */
 async function stateFile(dir: string, prefix: string | undefined): Promise<string | null> {
