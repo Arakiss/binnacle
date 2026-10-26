@@ -1,0 +1,6 @@
+{
+  "name": "binnacle",
+  "description": "binnacle, a heads-up display for Claude Code that shows what every agent, workflow and shell is doing",
+  "owner": { "name": "Arakiss" },
+  "plugins": [{ "name": "binnacle", "source": "./" }]
+}

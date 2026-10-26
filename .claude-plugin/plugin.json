@@ -1,0 +1,37 @@
+{
+  "name": "binnacle",
+  "version": "0.1.0",
+  "description": "A HUD above the Claude Code prompt: what every agent, workflow, background shell and other session is doing right now, with context and quota gauges and a status pane",
+  "author": { "name": "Arakiss" },
+  "homepage": "https://github.com/Arakiss/binnacle",
+  "repository": "https://github.com/Arakiss/binnacle",
+  "license": "MIT",
+  "keywords": ["hud", "status line", "agents", "subagents", "workflows", "monitoring"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "The language binnacle speaks: en, es, or the name of any dictionary you add under i18n/",
+      "default": "en"
+    },
+    "peersCommand": {
+      "type": "string",
+      "title": "Other sessions command",
+      "description": "A command printing the other live sessions as a JSON array (see the README); empty turns the rows off",
+      "default": ""
+    },
+    "watchCodexLoops": {
+      "type": "boolean",
+      "title": "Watch for orphaned Codex loops",
+      "description": "Flag Codex app-server wrapper loops left behind by Zentty and offer to end them",
+      "default": false
+    },
+    "hideModeHint": {
+      "type": "boolean",
+      "title": "Hide the permission-mode hint",
+      "description": "Drop the permission-mode reminder from the hint under the prompt",
+      "default": false
+    }
+  }
+}
