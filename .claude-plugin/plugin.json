@@ -1,6 +1,6 @@
 {
   "name": "binnacle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A HUD above the Claude Code prompt: what every agent, workflow, background shell and other session is doing right now, with context and quota gauges and a status pane",
   "author": { "name": "Arakiss" },
   "homepage": "https://github.com/Arakiss/binnacle",

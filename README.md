@@ -7,10 +7,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-bb9af7.svg)](https://code.claude.com/docs/en/plugins)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](tsconfig.json)
-[![Tests](https://img.shields.io/badge/tests-217%20passing-9ece6a.svg)](tests)
+[![Tests](https://img.shields.io/badge/tests-245%20passing-9ece6a.svg)](tests)
 [![i18n](https://img.shields.io/badge/i18n-en%20%C2%B7%20es-7dcfff.svg)](i18n)
 
-**v0.2.0** · Alpha
+**v0.3.0** · Alpha
 
 </div>
 
