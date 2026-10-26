@@ -20,7 +20,7 @@ const wake = atom({ plugin: 'binnacle', key: 'wake' } as const, true)
 const OUTPUT_READ_MAX = 256 * 1024
 
 /**
- * What the output file of a shell says, as statusline.ts reads it: null when it is gone, an empty
+ * What the output file of a shell says, as tools/liveness.ts reads it too: null when it is gone, an empty
  * tail (still running) when it is too big to read whole, since $.fs reads whole files.
  */
 async function probeShell($: Engine, shell: Shell): Promise<Probe> {

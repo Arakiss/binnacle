@@ -161,7 +161,7 @@ export type Shell = {
 /** An active agent as the status line needs it: enough to say whether it works, waits or stalled. */
 export type AgentPulse = AgentFacts & { id?: string; name: string; lastAt: number; busy: number; workflow?: string; doing?: Doing }
 
-/** What the mod writes to ./state/<session>.json for the status line; kept small. */
+/** What binnacle writes to ./state/<session>.json, the facts the status line and tools/liveness.ts draw from; kept small. */
 export type Shared = {
   mode?: Mode
   git?: Git | null
@@ -176,10 +176,8 @@ export type Shared = {
   shells?: Shell[]
   /** The names of the workflows the active agents belong to, by run id. */
   workflows?: Record<string, string>
-  /** The language the words are in, so the status line writes in the same one. */
+  /** The language the words are in, so tools/liveness.ts writes in the same one. */
   language?: string
-  /** True while the band above the prompt draws the HUD; the status line then stays quiet. */
-  band?: boolean
 }
 
 declare module 'claude-code' {

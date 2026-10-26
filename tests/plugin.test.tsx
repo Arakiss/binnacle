@@ -69,7 +69,6 @@ function engine(on: On, removed: string[] = [], spawned: string[][] = [], listin
     spawned.push([...e.argv])
     if (command === 'git') return first === 'status' ? ran(STATUS) : ran('/repo/acme\n')
     if (command === 'date') return ran('+0200\n')
-    if (command === 'printenv') return ran('/home/ana\n')
     if (command === 'ps') {
       return ran(
         [
@@ -409,21 +408,8 @@ test('session.start removes state files untouched for a week and nothing else', 
   await $.session.start(SURFACE)
   await clock.advance(250)
 
-  expect(removed).toEqual(['/home/ana/.claude/binnacle/state/dead.json'])
-})
-
-test('the state lands in ~/.claude/binnacle/state, where the status line reads it across updates', { options: OPTIONS }, async ($, on) => {
-  const files: Record<string, string> = {}
-  on('fs.write', (_$, e) => {
-    files[e.path] = e.text
-    return { value: undefined }
-  })
-  const clock = engine(on)
-  await $.session.start(SURFACE)
-  await clock.advance(2_000)
-  expect(Object.keys(files)).toContain('/home/ana/.claude/binnacle/state/session-1.json')
-  // The launcher the status line names runs this version's statusline.ts, quoted for the shell.
-  expect(files['/home/ana/.claude/binnacle/statusline.sh']).toMatch(/^#!\/bin\/sh\n#.*\nexec bun '\/.+\/statusline\.ts' "\$@"\n$/)
+  expect(removed).toHaveLength(1)
+  expect(removed[0]).toMatch(/\/state\/dead\.json$/)
 })
 
 const band = (props: { bodyColumns?: number; maxRows?: number; hasSurvey?: boolean; isWorking?: boolean } = {}) =>
@@ -549,22 +535,31 @@ describe('the band above the prompt', () => {
     await hint.unmount()
   })
 
-  test('while the band draws, the status line is told to keep quiet; /binnacle band off gives it back', { options: OPTIONS }, async ($, on) => {
-    const state = published(on)
+  test('until the band draws, binnacle pins its status line; while it draws, the line is cleared; band off pins it again', { options: OPTIONS }, async ($, on) => {
+    published(on)
+    const pinned: (string | undefined)[] = []
+    on('ui.status', (_$, e) => {
+      pinned.push(e.text)
+      return { value: undefined }
+    })
     const clock = engine(on)
     await $.session.start(SURFACE)
-    await clock.advance(2_000)
-    expect(state()?.band).toBeUndefined()
+    await clock.advance(6_000)
+    expect(pinned.at(-1)).toMatch(/^○ Idle · .*Opus 5\.5.* {3}acme · main · 2 uncommitted · 2 to push {3}Context 34% of 1M/)
+    expect(pinned.at(-1)).not.toContain('\n')
 
     const drawn = await $.ui.mount(band())
     await drawn.unmount()
-    await clock.advance(2_000)
-    expect(state()?.band).toBe(true)
+    await clock.advance(6_000)
+    expect(pinned.at(-1)).toBeUndefined()
 
     expect(await $.command.run({ command: 'binnacle', args: 'band off', ...COMPOSER })).toEqual(
       expect.objectContaining({ text: 'no band; the status line draws it again' }),
     )
-    expect(state()?.band).toBeUndefined()
+    expect(pinned.at(-1)).toMatch(/^○ Idle/)
+    await $.command.run({ command: 'binnacle', args: 'line hidden', ...COMPOSER })
+    expect(pinned.at(-1)).toBeUndefined()
+    await $.command.run({ command: 'binnacle', args: 'line full', ...COMPOSER })
     const off = await $.ui.mount(band())
     expect(await off.find({ type: 'Text', text: 'engine' })).toBeDefined()
     await off.unmount()

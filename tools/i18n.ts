@@ -41,8 +41,6 @@ for await (const file of sources.scan(root)) {
   for (const m of text.matchAll(/\bt\(\s*'([^']+)'/g)) if (m[1]) used.add(m[1])
   for (const m of text.matchAll(/\btn\(\s*'([^']+)'/g)) if (m[1]) used.add(`${m[1]}.one`).add(`${m[1]}.other`)
 }
-const statusline = await Bun.file(`${root}/statusline.ts`).text()
-for (const m of statusline.matchAll(/\bt\(\s*'([^']+)'/g)) if (m[1]) used.add(m[1])
 const unknown = [...used].filter(key => !(key in english)).sort()
 if (unknown.length > 0) problems.push(`the code uses keys en.json lacks: ${unknown.join(', ')}`)
 

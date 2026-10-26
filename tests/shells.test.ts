@@ -72,7 +72,7 @@ describe('the state of a shell, from the tail of its output', () => {
   })
 })
 
-// The test sandbox has no disk; statusline.ts reads with these two and nothing else decides.
+// The test sandbox has no disk; tools/liveness.ts reads with these two and nothing else decides.
 describe('reading output files', () => {
   test('only a task output file named by an absolute path is read at all', () => {
     expect(isOutputPath(PATH)).toBe(true)

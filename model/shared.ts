@@ -1,5 +1,5 @@
-// What the mod writes for the status line, from the session's values: small, and only what the
-// status line draws (the pane reads the values themselves).
+// The session's facts the status line draws from, also written to ./state for tools/liveness.ts:
+// small, and only what the status line draws (the pane reads the values themselves).
 
 import type { Activity, AgentPulse, Call, Ci, Git, Mode, Peer, Sample, Shared, Shell } from '../types'
 import { activeAgents, currentCall, previousCall } from './activity'
@@ -25,8 +25,6 @@ export type Values = {
   loops: number
   history: Record<string, Sample[]>
   shells?: readonly Shell[]
-  /** Whether the band above the prompt draws the HUD now. */
-  band?: boolean
   /** The language the words are in. */
   language?: string
 }
@@ -52,7 +50,6 @@ export function shareOf(v: Values): Shared {
     agents,
     shells: [...(v.shells ?? [])],
     ...(Object.keys(workflows).length > 0 ? { workflows } : {}),
-    ...(v.band ? { band: true } : {}),
     ...(v.language && v.language !== 'en' ? { language: v.language } : {}),
   }
 }

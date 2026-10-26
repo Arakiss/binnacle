@@ -12,11 +12,16 @@ import { createBandView } from '../render/band-view'
 import { gaugeCells } from '../render/gauge'
 import { prettyModel } from '../render/format'
 import { paneLines, type PaneInput } from '../render/pane'
-import type { Tone } from '../render/text'
+import { statusLines, type Status } from '../render/status'
+import { plainText, type Tone } from '../render/text'
 import type { Activity, Meter, Mode, Shared, Shell, Snapshot } from '../types'
 import { runsOf, subagentStop, teammateIdle, watch } from './watch'
 
 const PANE = 'binnacle'
+
+/** The pinned status line is one line; its parts are laid out as for a wide terminal and joined. */
+const STATUS_COLUMNS = 400
+const STATUS_JOIN = '   '
 
 /** Empty rows above and below the band. */
 const BAND_PAD = 1
@@ -224,50 +229,42 @@ async function sharedNow($: Engine, now: number): Promise<Shared> {
     loops: (await read($, loops)).length,
     history: await read($, history),
     shells: await read($, shells),
-    band: isBandDrawn && (await read($, band)),
     language: language(),
   })
 }
 
-let stateDir = ''
-
-/**
- * Where the state files live: ~/.claude/binnacle/state, the folder statusline.ts reads, which stays
- * put when an update moves the plugin to a new folder. Without a home, the plugin's own folder.
- */
-async function stateDirOf($: Engine): Promise<string> {
-  if (stateDir !== '') return stateDir
-  try {
-    const ran = await $.process.run(['printenv', 'HOME'], { timeoutMs: 2000 })
-    const home = ran.exitCode === 0 ? ran.stdout.trim() : ''
-    stateDir = home.startsWith('/') ? `${home}/.claude/binnacle/state` : `${$.plugin.root}/state`
-  } catch {
-    stateDir = `${$.plugin.root}/state`
-  }
-  return stateDir
-}
-
-/**
- * Writes ~/.claude/binnacle/statusline.sh, which runs this version's status line: the path to name
- * in Claude Code's `statusLine`, since an update installs the plugin in a new folder.
- */
-async function writeLauncher($: Engine): Promise<void> {
-  const dir = await stateDirOf($)
-  if (!dir.endsWith('/.claude/binnacle/state')) return
-  const quoted = `'${`${$.plugin.root}/statusline.ts`.replaceAll("'", "'\\''")}'`
-  const script = `#!/bin/sh\n# Written by binnacle when a session starts: runs the installed version's status line.\nexec bun ${quoted} "$@"\n`
-  const path = dir.replace(/\/state$/, '/statusline.sh')
-  const before = await $.fs.read(path).catch(() => '')
-  if (before !== script) await $.fs.write(path, script)
-}
-
-// The status line draws from this file; it is written only when its content changed.
+// tools/liveness.ts reads this file; it is written only when its content changed.
 async function publish($: Engine): Promise<void> {
   isDirty = false
   const body = JSON.stringify(await sharedNow($, await $.clock.now()))
   if (body === published) return
   published = body
-  await $.fs.write(`${await stateDirOf($)}/${await $.session.id()}.json`, body)
+  await $.fs.write(`${$.plugin.root}/state/${await $.session.id()}.json`, body)
+}
+
+let pinned: string | undefined
+
+/**
+ * The status line binnacle pins under the prompt while the band is off or cannot draw: the same
+ * words, on one line. Cleared while the band draws, and by `/binnacle line hidden`.
+ */
+async function pinStatus($: Engine): Promise<void> {
+  let text: string | undefined
+  if (!isBandDrawn) {
+    const now = await $.clock.now()
+    const s = await read($, snapshot)
+    const status: Status = {
+      model: prettyModel(await $.session.model().catch(() => ''), 'Claude'),
+      context: s?.percent === undefined ? undefined : { percent: s.percent, tokens: s.tokens, window: s.window },
+      limits: s?.limits ?? [],
+      usd: s?.usd,
+    }
+    const lines = statusLines(status, await sharedNow($, now), now, STATUS_COLUMNS, await read($, tz), await runsOf($, await read($, shells)))
+    text = lines.length === 0 ? undefined : lines.map(plainText).join(STATUS_JOIN)
+  }
+  if (text === pinned) return
+  pinned = text
+  $.ui.status(text)
 }
 
 /** Ids of the listed shells that ended; read only when the list is full and something must go. */
@@ -294,7 +291,7 @@ const STALE_MS = 7 * 24 * 3_600_000
 // $.fs has no delete, so rm runs without a shell on the listed regular files alone.
 async function pruneState($: Engine): Promise<void> {
   try {
-    const dir = await stateDirOf($)
+    const dir = `${$.plugin.root}/state`
     if (!(await $.fs.exists(dir))) return
     const cutoff = (await $.clock.now()) - STALE_MS
     const stale = (await $.fs.list(dir))
@@ -306,12 +303,11 @@ async function pruneState($: Engine): Promise<void> {
   }
 }
 
-/** Records whether the band draws the HUD; a change reaches the status line at the next publish. */
+/** Records whether the band draws the HUD; the pinned status line follows at the next tick. */
 function bandDrawn(isDrawn: boolean): void {
   if (isDrawn === isBandDrawn) return
   isBandDrawn = isDrawn
   if (!isDrawn) hasBandShells = false
-  isDirty = true
 }
 
 async function isPaneOpen($: Engine): Promise<boolean> {
@@ -394,7 +390,6 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await loadLanguage($, settings.language)
     quietly(pruneState($))
-    quietly(writeLauncher($))
     await $.command.register({ name: 'binnacle', description: help() })
 
     const usage = await $.session.usage()
@@ -424,6 +419,7 @@ export const register: Register = (on, options) => {
       if (isBandDrawn && tick % 5 === 0) $.ui.invalidate('ui.render')
       else if (tick % 15 === 0) quietly(isPaneOpen($).then(isOpen => isOpen && $.ui.invalidate('ui.render')))
       if (isDirty) quietly(publish($))
+      if (tick % 5 === 0) quietly(pinStatus($))
     })
 
     return next(e)
@@ -454,6 +450,7 @@ export const register: Register = (on, options) => {
       if (!isOn) bandDrawn(false)
       $.ui.invalidate('ui.render')
       await publish($)
+      await pinStatus($)
       return { text: isOn ? t('command.bandOn') : t('command.bandOff') }
     }
 
@@ -470,6 +467,7 @@ export const register: Register = (on, options) => {
     if (chosen === undefined) return { text: help() }
     await update($, mode, () => chosen)
     await publish($)
+    await pinStatus($)
     return { text: t('command.line', { mode: chosen === 'full' ? t('mode.full') : chosen === 'compact' ? t('mode.compact') : t('mode.hidden') }) }
   })
 

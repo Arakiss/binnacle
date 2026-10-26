@@ -16,7 +16,7 @@ import { dollars, duration, limitName, percent, shortWhen, tokens } from './form
 import { shellLines } from './shells'
 import { bar, cells, cutWords, fitWords, joined, toneOf, type Line, type Tone } from './text'
 
-/** What the status line's stdin says, reduced to what the HUD draws. */
+/** The model and the budgets, reduced to what the status line draws. */
 export type Status = {
   model: string
   context?: { percent: number; tokens?: number; window: number }

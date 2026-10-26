@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320">
+  <!-- binnacle README banner. Fonts: JetBrains Mono and FiraCode Nerd Font Mono; render with
+       `rsvg-convert -w 2560 assets/banner.svg -o assets/banner.png`. Colours: Tokyo Night. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1a1b26"/>
+      <stop offset="1" stop-color="#16161e"/>
+    </linearGradient>
+    <radialGradient id="lamp" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e0af68" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#e0af68" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#e0af68" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dcfff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#7dcfff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#sky)"/>
+  <!-- A faint horizon -->
+  <line x1="0" y1="262" x2="1280" y2="262" stroke="#7aa2f7" stroke-opacity="0.07"/>
+
+  <!-- Mark: a compass card under its glass dome, lit from within -->
+  <g transform="translate(140 160)">
+    <circle r="120" fill="url(#lamp)"/>
+    <path d="M -66 4 A 66 66 0 0 1 66 4" fill="url(#dome)" stroke="#7dcfff" stroke-opacity="0.35" stroke-width="1.5"/>
+    <circle r="58" fill="#16161e" stroke="#3b4261" stroke-width="2"/>
+    <circle r="47" fill="none" stroke="#7aa2f7" stroke-opacity="0.55" stroke-width="1.2"/>
+    <g stroke="#737aa2" stroke-width="1.4" stroke-linecap="round">
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(0)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(22.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(45)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(67.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(90)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(112.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(135)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(157.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(180)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(202.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(225)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(247.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(270)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(292.5)"/>
+      <line x1="0" y1="-47" x2="0" y2="-40" transform="rotate(315)"/>
+      <line x1="0" y1="-47" x2="0" y2="-43" transform="rotate(337.5)"/>
+    </g>
+    <g transform="rotate(28)">
+      <polygon points="0,-36 8,0 0,6 -8,0" fill="#e0af68"/>
+      <polygon points="0,36 8,0 0,-6 -8,0" fill="#565f89"/>
+    </g>
+    <circle r="4" fill="#c0caf5"/>
+  </g>
+
+  <!-- Wordmark and line -->
+  <text x="236" y="170" font-family="JetBrains Mono" font-weight="700" font-size="74" letter-spacing="-2" fill="#c0caf5">binnacle</text>
+  <text x="240" y="212" font-family="JetBrains Mono" font-weight="500" font-size="15" letter-spacing="3.6" fill="#737aa2">A HEADS-UP DISPLAY FOR CLAUDE CODE</text>
+
+  <!-- A glance at the band: budgets, then a row per agent and shell -->
+  <g font-family="FiraCode Nerd Font Mono" font-size="16">
+    <rect x="700" y="70" width="532" height="180" rx="12" fill="#16161e" stroke="#292e42" stroke-width="1.5"/>
+
+    <text x="726" y="110" fill="#737aa2">ctx</text>
+    <rect x="768" y="98" width="110" height="14" rx="7" fill="#3b4261"/>
+    <rect x="768" y="98" width="38" height="14" rx="7" fill="#7dcfff"/>
+    <text x="888" y="110" fill="#c0caf5">34%</text>
+    <text x="956" y="110" fill="#737aa2">5h</text>
+    <rect x="988" y="98" width="110" height="14" rx="7" fill="#3b4261"/>
+    <rect x="988" y="98" width="68" height="14" rx="7" fill="#e0af68"/>
+    <text x="1108" y="110" fill="#e0af68">62% ▲</text>
+
+    <line x1="720" y1="128" x2="1212" y2="128" stroke="#292e42"/>
+
+    <text x="726" y="160"><tspan font-size="21" fill="#7aa2f7">◐</tspan><tspan x="752" fill="#c0caf5">width-audit</tspan><tspan x="900" fill="#7aa2f7">working 20s</tspan><tspan x="1030" fill="#737aa2">Bash · tests</tspan></text>
+    <text x="726" y="194"><tspan font-size="21" fill="#f7768e">✖</tspan><tspan x="752" fill="#c0caf5">explore types</tspan><tspan x="900" fill="#f7768e">stalled 12m</tspan><tspan x="1030" fill="#737aa2">nothing wakes it</tspan></text>
+    <text x="726" y="228"><tspan font-size="21" fill="#e0af68">◓</tspan><tspan x="752" fill="#c0caf5">main</tspan><tspan x="900" fill="#737aa2">shell 6m</tspan><tspan x="1030" fill="#737aa2">dev server</tspan></text>
+  </g>
+</svg>
