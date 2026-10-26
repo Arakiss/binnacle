@@ -229,6 +229,7 @@
   "row.owed": "{why}: answer it or close it",
   "row.peerCard": "another session ({harness}) · {repo}",
   "row.peerLastSignal": "last signal {time} ago",
+  "row.peersTitle": "other sessions · not this one",
   "row.silent": "silent {time}",
   "row.thinking": "thinking",
   "row.thinkingAfter": "thinking · last: {last}",

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { useLanguage } from '../i18n'
+import { t, useLanguage } from '../i18n'
 
 import { at, bandLines, budgetNotices, compact, contextColour, DETAIL_ROWS, elapsedOf, isAheadOfPace, lineCells, noticesOf, PALETTE, peerWords, quotaColour, rowsOf, size, THEME, type BandLine, type Item } from '../render/band'
 import { createBandView } from '../render/band-view'
@@ -186,6 +186,39 @@ describe('band lines', () => {
     ])
     // A blank name is no name.
     expect(peersFrom(JSON.stringify([row(a, { display_name: '  ' })]), 'me').map(p => peerWords(p).name)).toEqual(['codex 1b2c'])
+  })
+
+  test("other sessions sit under their own title when they share the band with this session's rows", () => {
+    const other = { session: 's1', harness: 'codex', place: 'shop', repo: '/w/shop', branch: null, intent: 'Juniper: cut the release', liveness: 'live', lastMs: NOW - MIN }
+    const shell = (label: string, age: number) => ({ label, startedAt: NOW - age * MIN, state: 'running' as const, quietSince: NOW - 5_000 })
+    const own = [shell('Wait for PR 3186', 2)]
+    const textsOf = (input: Parameters<typeof bandLines>[0], rows: number) => bandLines(input, 160, rows).slice(2).map(line => itemText(line.left[0]))
+    const mixed = { ...bandOf(STATUS, IDLE, own), peers: [other] }
+    const lines = textsOf(mixed, 20)
+    const title = lines.indexOf(t('row.peersTitle'))
+    expect(title).toBeGreaterThan(0)
+    expect(lines[title + 1]).toStartWith('◆ Juniper')
+    expect(lines.slice(0, title).some(line => line.startsWith('◆'))).toBe(false)
+    // Only other sessions: nothing to tell apart, so no title.
+    expect(textsOf({ ...bandOf(STATUS, IDLE), peers: [other] }, 20)).not.toContain(t('row.peersTitle'))
+    // Two rows of room: both rows, no title.
+    expect(textsOf(mixed, 4)).toHaveLength(2)
+    expect(textsOf(mixed, 4)).not.toContain(t('row.peersTitle'))
+    // Short of room the other session is counted rather than drawn, and its title gives the line back to this session's rows.
+    const crowded = { ...bandOf(STATUS, IDLE, [shell('Build the site', 1), shell('Run the e2e suite', 2), shell('Watch the deploy', 3)]), peers: [other] }
+    const tight = textsOf(crowded, 5)
+    expect(tight).toHaveLength(3)
+    expect(tight).not.toContain(t('row.peersTitle'))
+    expect(tight.filter(line => line.startsWith('◐'))).toHaveLength(2)
+    expect(tight[2]).toStartWith('+2')
+    // The title is the active language's.
+    try {
+      useLanguage('es')
+      expect(t('row.peersTitle')).not.toBe(lines[title])
+      expect(textsOf(mixed, 20)).toContain(t('row.peersTitle'))
+    } finally {
+      useLanguage('en')
+    }
   })
 
   test('the main loop between calls says the last thing it did', () => {

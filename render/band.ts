@@ -705,15 +705,29 @@ function hiddenWords(hidden: readonly Row[]): string {
 /**
  * The rows for `room` lines at most, columns aligned; past the room, the least urgent go and one
  * row counts them. Every row but the first sits tight.
+ *
+ * This session's rows and other sessions' rows read alike at a glance, so when both share the
+ * band, one dim title line sits before the first other session; it takes one of the rows, and is
+ * left out when no other session's row would show anyway.
  */
 export function detailLines(input: BandInput, shared: Shared, w: number, room: number): BandLine[] {
   const rows = rowsOf(input, shared)
   if (rows.length === 0 || room <= 0) return []
-  const shown = rows.length <= room ? rows : rows.slice(0, Math.max(0, room - 1))
+  const take = (lines: number) => (rows.length <= lines ? rows : rows.slice(0, Math.max(0, lines - 1)))
+  const hasPeer = (list: readonly Row[]) => list.some(r => r.kind === 'peer')
+  const isMixed = hasPeer(rows) && rows.some(r => r.kind !== 'peer')
+  const isTitled = isMixed && room > 2 && (hasPeer(take(room - 1)) || hasPeer(take(room)))
+  const shown = take(isTitled ? room - 1 : room)
   const hidden = rows.slice(shown.length)
   const whoW = Math.min(WHO_MAX, Math.max(4, ...shown.map(r => [...r.who].length)))
   const stateW = Math.min(STATE_MAX, Math.max(...shown.map(r => [...r.state].length)))
-  const items = shown.map(row => rowItem(row, whoW, stateW, w))
+  const items: Item[] = []
+  for (const row of shown) {
+    if (isTitled && row.kind === 'peer' && !items.some(item => item.key === 'peers-title')) {
+      items.push({ key: 'peers-title', parts: [dim(cutWords(t('row.peersTitle'), w))] })
+    }
+    items.push(rowItem(row, whoW, stateW, w))
+  }
   if (hidden.length > 0) {
     const what = hiddenWords(hidden)
     const said = shown.length === 0 ? what : t('row.moreOf', { n: hidden.length, what })
