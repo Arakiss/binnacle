@@ -5,6 +5,7 @@ import { useLanguage } from '../i18n'
 import { at, bandLines, budgetNotices, compact, contextColour, DETAIL_ROWS, elapsedOf, isAheadOfPace, lineCells, noticesOf, PALETTE, peerWords, quotaColour, rowsOf, size, THEME, type BandLine, type Item } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { CAP, easedToward, gaugeRuns } from '../render/gauge'
+import { peersFrom } from '../model/signals'
 import { drawn, STAND_INS, STILL_PARTS } from '../tools/draw'
 import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, bandOf, FILLING, IDLE, NO_REPO, NOW, RUNS, SHARED_CHECKOUT, STATUS, TZ, WORKING } from './fixtures'
 
@@ -166,6 +167,25 @@ describe('band lines', () => {
     const long = { ...input, peers: [{ ...peer('s4', 'Longer: some'), repo: '/w/a-repository-with-a-long-name' }, peer('s1', 'Vesper: short')] }
     const aligned = bandLines(long, 160, 20).slice(2).map(line => itemText(line.left[0]))
     expect(new Set(aligned.map(t => t.search(/ {2}(some|short)$/))).size).toBe(1)
+  })
+
+  test('two sessions started the same day never share a name', () => {
+    // UUIDv7 ids open with their timestamp: same-day sessions share the first characters.
+    const a = '019a2b3c-4d5e-7f00-8123-4567890a1b2c'
+    const b = '019a2b3c-4d5e-7f00-8999-fedcba98d7e6'
+    const row = (session: string, extra: Record<string, unknown> = {}) => ({ session, root: session, harness: 'codex', lifecycle: 'active', liveness: 'live', cwd: '/w/shop', ...extra })
+    // A command that gives no names: the fallback reads the random tail of the id.
+    const names = peersFrom(JSON.stringify([row(a), row(b)]), 'me').map(p => peerWords(p).name)
+    expect(new Set(names).size).toBe(2)
+    expect(names.sort()).toEqual(['codex 1b2c', 'codex d7e6'])
+    // A command that names them: its name wins over the one an intent opens with, which still leaves the mission.
+    const named = peersFrom(JSON.stringify([row(a, { display_name: 'Vesper', intent: 'Juniper: move the queue' }), row(b, { display_name: ' Juniper ' })]), 'me')
+    expect(named.map(peerWords)).toEqual([
+      { name: 'Vesper', mission: 'move the queue' },
+      { name: 'Juniper', mission: '' },
+    ])
+    // A blank name is no name.
+    expect(peersFrom(JSON.stringify([row(a, { display_name: '  ' })]), 'me').map(p => peerWords(p).name)).toEqual(['codex 1b2c'])
   })
 
   test('the main loop between calls says the last thing it did', () => {

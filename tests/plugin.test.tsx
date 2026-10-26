@@ -448,8 +448,8 @@ describe('the band above the prompt', () => {
     expect(alert).toMatch(/^⚠ CI failing/)
     // Each live session elsewhere on the bus gets a row: its name, where it works, what it says it does.
     expect(rest).toHaveLength(2)
-    expect(rest[0]).toMatch(/^◆ codex othe +acme \S+ +no stated intent/)
-    expect(rest[1]).toMatch(/^◆ session else +other \S+ +no stated intent/)
+    expect(rest[0]).toMatch(/^◆ codex ther +acme \S+ +no stated intent/)
+    expect(rest[1]).toMatch(/^◆ session here +other \S+ +no stated intent/)
 
     // The model's pill is ink on lavender, the branch blue, the gauges animated surface modules; nothing fades.
     expect((await drawn.find({ type: 'Text', text: / ✳ Opus 5\.5 / }))?.props).toEqual(expect.objectContaining({ color: '#1a1b26', backgroundColor: '#bb9af7', bold: true }))

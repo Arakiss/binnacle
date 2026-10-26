@@ -53,11 +53,13 @@ export function prFrom(viewJson: string): Pr | null {
 /**
  * One session as the `peersCommand` option's command prints it: a JSON array of these. Only
  * `session` is required; a row whose `lifecycle` is present and not `active` is left out, and
- * `liveness: "live"` marks the ones at work. An `intent` that opens with a capitalised name and a
- * colon ("Vesper: fixing the importer") reads as that session's name and mission.
+ * `liveness: "live"` marks the ones at work. A `display_name` is the session's name; without one,
+ * an `intent` that opens with a capitalised name and a colon ("Vesper: fixing the importer") reads
+ * as that session's name and mission.
  */
 type Row = {
   session?: string
+  display_name?: string
   harness?: string
   cwd?: string
   repo?: string
@@ -79,6 +81,7 @@ export function peersFrom(lsJson: string, self: string, max = 12): Peer[] {
     .slice(0, max)
     .map(r => ({
       session: r.session ?? '',
+      ...(typeof r.display_name === 'string' && r.display_name.trim() !== '' ? { displayName: r.display_name.trim() } : {}),
       harness: r.harness ?? '',
       place: (r.cwd ?? '').split('/').pop() ?? '',
       repo: r.repo ?? '',
@@ -89,12 +92,18 @@ export function peersFrom(lsJson: string, self: string, max = 12): Peer[] {
     }))
 }
 
-/** A session's name and mission from its intent, which may open with its name: "Vesper: …". */
+/**
+ * A session's name and mission. The name the peers command gives comes first, so binnacle agrees
+ * with whatever else shows that list; then the name an intent may open with ("Vesper: …"); last,
+ * the harness and the id's LAST four characters: a UUIDv7 opens with its timestamp, so the first
+ * four are the same for every session started the same day.
+ */
 export function peerWords(peer: Peer): { name: string; mission: string } {
   const intent = (peer.intent ?? '').trim()
   const named = /^(\p{Lu}[\p{L}-]{1,15}):\s*(.*)$/su.exec(intent)
-  if (named?.[1] !== undefined) return { name: named[1], mission: named[2] ?? '' }
-  return { name: `${peer.harness || t('peer.session')} ${peer.session.slice(0, 4)}`, mission: intent }
+  const mission = named?.[1] !== undefined ? (named[2] ?? '') : intent
+  const name = peer.displayName ?? named?.[1] ?? `${peer.harness || t('peer.session')} ${peer.session.slice(-4)}`
+  return { name, mission }
 }
 
 /** Live sessions writing in this very checkout. */

@@ -110,6 +110,7 @@ that prints a JSON array of sessions:
 [
   {
     "session": "b1c2d3e4",
+    "display_name": "Vesper",
     "harness": "claude-code",
     "cwd": "/home/you/shop",
     "repo": "/home/you/shop",
@@ -122,8 +123,10 @@ that prints a JSON array of sessions:
 ]
 ```
 
-Only `session` is required. An `intent` that opens with a capitalised name and a colon shows that
-name; sessions with `liveness: "live"` get a row; a `lifecycle` other than `active` is left out.
+Only `session` is required. A session is named by its `display_name`; without one, by the name
+an `intent` opens with (a capitalised word and a colon); without either, by its harness and the
+last four characters of its id. Sessions with `liveness: "live"` get a row; a `lifecycle` other
+than `active` is left out.
 The command runs without a shell, split on spaces, every ten seconds.
 
 ## For scripts

@@ -28,6 +28,8 @@ export type Pr = { number: number; review: string; url?: string }
 /** Another live or recently seen session, as the `peersCommand` option's command lists it. */
 export type Peer = {
   session: string
+  /** The name the command gives the session (`display_name`); absent when it gives none. */
+  displayName?: string
   harness: string
   place: string
   repo: string

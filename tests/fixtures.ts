@@ -148,7 +148,7 @@ export function busyActivity(): Activity {
 
 export const PEERS: Peer[] = [
   { session: 'b1c2d3e4-0000', harness: 'claude-code', place: 'acme', repo: GIT.root, branch: 'main', intent: 'Vesper: Syncing the docs site', liveness: 'live', lastMs: NOW - MIN },
-  { session: 'c9d8e7f6-0000', harness: 'codex', place: 'shop', repo: '/home/dev/shop', branch: null, intent: null, liveness: 'stale', lastMs: NOW - 40 * MIN },
+  { session: 'c9d8e7f6-4a1b', harness: 'codex', place: 'shop', repo: '/home/dev/shop', branch: null, intent: null, liveness: 'stale', lastMs: NOW - 40 * MIN },
 ]
 
 /** Two shells running and two that ended: one clean a minute ago, one failing before it. */

@@ -259,7 +259,7 @@ describe('pane', () => {
     expect(all).toContain('✗ CI 7 passing · 2 failing · 0 pending')
     expect(all).toContain('from another session: Can you review PR 41 before five?')
     expect(all).toMatch(/● Vesper +acme +Syncing the docs site/)
-    expect(all).toMatch(/○ codex c9d8 +shop, silent/)
+    expect(all).toMatch(/○ codex 4a1b +shop, silent/)
     expect(all).toContain('→ /binnacle reap ends them')
   })
 })
