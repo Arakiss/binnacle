@@ -230,7 +230,7 @@
   "quota.resetUnknown": "no se sabe cuándo se reinicia",
   "quota.resetsIn": "se reinicia en {time}, {when}",
   "quota.share": "{used} % usado · queda el {left} %",
-  "quote":"«{text}»",
+  "quote": "«{text}»",
   "reason.exit": "salió con código {code}",
   "reason.hook": "hook: {text}",
   "reason.rule": "regla {rule}",
