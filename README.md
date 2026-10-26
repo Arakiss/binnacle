@@ -157,6 +157,30 @@ before `bun` prints it anyway.
 `bun tools/liveness.ts` prints the same verdicts for the latest session, one row per agent and
 shell (`--json` for one object per row), and exits with code 3 while an agent is stalled.
 
+### How much quota is left
+
+`bun tools/quota.ts` answers in one command, for each rate-limit window: the share used and left,
+when it resets, the pace of the last hour, when the window fills at that pace and whether that
+comes before the reset, and how old the reading is.
+
+```
+Claude Code quota · read 3 min ago
+  5-hour limit  40% used · 60% left · resets in 2 h, at 16:05
+                +10.0 points/h over the last hour · would be full in 5 h 57 min (20:02), after it resets
+▲ week          70% used · 30% left · resets in 20 h, tomorrow at 10:05
+                +10.0 points/h over the last hour · full in 2 h 57 min (17:02), before it resets
+```
+
+The quota is the account's, so the figures come from the session that read them last and the pace
+from every session's readings. With `--json`, or whenever stdout is not a terminal, it prints one
+object instead: `version`, `now`, `stateFile`, `observedAt`, `ageMs` and `windows`, each window
+with `kind`, `usedPercent`, `leftPercent`, `observedAt`, `ageMs`, `resetsAt`, `resetsInMs`,
+`hasReset`, `pacePerHour`, `fullAt`, `fullInMs`, `fillsBeforeReset` and `source` (times in epoch
+milliseconds, `null` where unknown; `render/quota.ts` documents each). It exits 0 with a reading
+and 1 without one, saying why and what to do. `--state-dir` (or `BINNACLE_STATE_DIR`) reads
+another folder, `--lang` (or `BINNACLE_LANGUAGE`) picks the language, else the `language` option.
+State written before 0.3.0 has no reset times, so they read as unknown.
+
 ## Development
 
 ```bash
