@@ -1,6 +1,6 @@
 {
   "name": "binnacle",
-  "description": "binnacle, a heads-up display for Claude Code that shows what every agent, workflow and shell is doing",
+  "description": "binnacle, a heads-up display for Claude Code that says what every agent, workflow and shell is working on",
   "owner": { "name": "Arakiss" },
   "plugins": [{ "name": "binnacle", "source": "./" }]
 }
