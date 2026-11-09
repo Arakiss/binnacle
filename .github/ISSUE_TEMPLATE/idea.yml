@@ -1,0 +1,15 @@
+name: Idea
+description: Something the band, the pane or the tools could say or do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What did you want to know, and could not see?
+      description: The moment you looked at the band and it did not answer.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would answer it?

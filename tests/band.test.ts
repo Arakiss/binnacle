@@ -487,6 +487,8 @@ describe('the heading: what the session is about', () => {
     const audit = texts.findIndex(t => t.includes('width-audit'))
     expect(texts[audit]).toBe('⠋ width-audit  working 20s  Running every fixture at 40 columns  ▸ Bash · Measure the band at 40 columns')
     expect(texts[audit + 1]).toBe('╰ Find which band lines overflow at narrow widths · so far: 70 and 120 columns are clean · 3 reads · 1 search · 4 commands')
+    // Under the pointer, the task it was given, whole.
+    expect(cardText(byKey(told(), 'agent-a-width'))).toStartWith('asked: Measure the band at 40, 70 and 120 columns against every fixture and report which lines overflow. · width-audit · working')
     // One no model has read yet speaks in its own last words, under the task it was given.
     const types = texts.findIndex(t => t.includes('explore types'))
     expect(texts[types]).toBe('⠋ explore types  working 3m  Three readers so far; checking the tools folder next.')

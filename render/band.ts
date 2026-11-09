@@ -639,7 +639,8 @@ function agentRow(j: Judged, now: number, live?: Live): Row {
   const doing = a.doing
   const story = a.story
   const brief = briefOf(story)
-  const goal = brief?.goal || story?.asks?.at(-1) || ''
+  const ask = story?.asks?.at(-1)
+  const goal = brief?.goal || ask || ''
   const quiet = doing === undefined ? [dim(t('row.thinking'))] : [dim(t('row.thinkingAfter', { last: callWords(doing.tool, doing.text) }))]
   const call = doing?.running ? callWords(doing.tool, doing.text) : undefined
   // At work, what it is on; in any other state, why it stands so, then what it was on.
@@ -664,7 +665,8 @@ function agentRow(j: Judged, now: number, live?: Live): Row {
     state,
     stateColour: isOwed || isSilent ? PALETTE.amber : v.state === 'working' || v.state === 'waiting' ? PALETTE.dim : LIVE_COLOUR[v.state],
     what: isOwed ? [text(t('row.owed', { why: v.why }), PALETTE.amber)] : what,
-    card: [dim(`${a.name} · ${word(v.state)} ${compact(now - v.since)} · ${v.why}${doing ? ` · ${t(doing.running ? 'row.now' : 'row.last', { call: callWords(doing.tool, doing.text) })}` : ''}`)],
+    // Under the pointer: the task it was given, whole, then how it stands and its call.
+    card: [dim(`${ask === undefined ? '' : `${t('main.asked', { ask })} · `}${a.name} · ${word(v.state)} ${compact(now - v.since)} · ${v.why}${doing ? ` · ${t(doing.running ? 'row.now' : 'row.last', { call: callWords(doing.tool, doing.text) })}` : ''}`)],
     ...(detail === '' ? {} : { detail: [dim(detail)] }),
   }
 }

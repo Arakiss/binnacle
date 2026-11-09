@@ -19,12 +19,14 @@ The band now says what is being worked on, not which tool ran last.
   hour. `/binnacle digest on|off` switches it; without it the band shows each loop's own words.
 - Each agent's row says what it is on, in words, with a second line for its goal and what it has
   so far when the band has rows to spare.
+- Under the pointer, an agent's row shows the task it was given, whole.
 - An agent that just reported keeps a row for three minutes with how its report opens.
 - Other sessions that run binnacle get a row each, with their goal and what they do now, from
   their own state files and with nothing to configure.
 - A "what it is about" section at the top of the status pane.
 - `tools/shot.ts` and `tools/demo.ts`, which draw the README's stills and recording from the test
   fixtures.
+- CI on every push and pull request, a guide for contributors, issue forms and a security policy.
 
 ### Changed
 
