@@ -2,19 +2,23 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, PluginOptions, Register } from 'claude-code'
 
 import { DEFAULT_LANGUAGE, dictionaryFrom, language, t, useLanguage } from '../i18n'
+import { DICTIONARIES } from '../i18n/dictionaries'
 
 import * as act from '../model/activity'
-import { shareOf } from '../model/shared'
+import { briefsFrom, evidenceOf, isDue, printOf, promptOf, READ_TIMEOUT_MS, READER, REPLY_TOKENS, systemOf } from '../model/digest'
+import { FRESH_MS, mateFrom, sessionOf } from '../model/fleet'
+import { BEAT_MS, shareOf } from '../model/shared'
+import * as st from '../model/story'
 import { shellAdded, shellFrom, shellStopped, SHELLS_MAX } from '../model/shells'
 import { ciFrom, gitFrom, loopsFrom, observed, offsetFrom, peersFrom, prFrom, remember } from '../model/signals'
-import { bandLines, budgetNotices, noticesOf, PALETTE, THEME, type Action, type GaugePart, type SpinnerPart } from '../render/band'
+import { bandLines, budgetNotices, MAIN, noticesOf, PALETTE, THEME, type Action, type GaugePart, type Live, type SpinnerPart } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { gaugeCells } from '../render/gauge'
 import { prettyModel } from '../render/format'
 import { paneLines, type PaneInput } from '../render/pane'
 import { statusLines, type Status } from '../render/status'
 import { plainText, type Tone } from '../render/text'
-import type { Activity, Meter, Mode, Shared, Shell, Snapshot } from '../types'
+import type { Activity, Mate, Meter, Mode, Shared, Shell, Snapshot } from '../types'
 import { runsOf, subagentStop, teammateIdle, watch } from './watch'
 
 const PANE = 'binnacle'
@@ -40,6 +44,8 @@ const shells = atom({ plugin: 'binnacle', key: 'shells' } as const, [])
 const band = atom({ plugin: 'binnacle', key: 'band' } as const, true)
 const tz = atom({ plugin: 'binnacle', key: 'tz' } as const, 0)
 const wake = atom({ plugin: 'binnacle', key: 'wake' } as const, true)
+const digest = atom({ plugin: 'binnacle', key: 'digest' } as const, true)
+const mates = atom({ plugin: 'binnacle', key: 'mates' } as const, [])
 
 /** The options the user set in the plugin's settings; `register` reads them on every load. */
 type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean }
@@ -85,6 +91,32 @@ let lastChimeAt = 0
 let isBandDrawn = false
 /** Whether the band's last drawing had a row for a background shell. */
 let hasBandShells = false
+/** What each loop thinks at this moment, by loop; a step's thinking lives here until the step ends. */
+let live: Record<string, Live> = {}
+/** Whether `live` changed since the band last drew. */
+let isLiveStale = false
+/** The readings asked of the small model: when the last was asked and of what, and each of the last hour. */
+let readAt: number | undefined
+let readPrint: string | undefined
+let readTimes: number[] = []
+let isReading = false
+
+/** The most of a step's thinking kept while it streams: enough for its newest sentence. */
+const THINKING_KEPT = 400
+
+/** A loop's step thinks: the band shows the newest of it at its next tick. */
+function thinks(key: string, thinking: string): void {
+  live = { ...live, [key]: { thinking: st.tail(thinking) } }
+  isLiveStale = true
+}
+
+/** A loop's step ended: what it thought is no longer what it does. */
+function hush(key: string): void {
+  if (!(key in live)) return
+  const { [key]: _gone, ...rest } = live
+  live = rest
+  isLiveStale = true
+}
 
 /** Background work never surfaces as a failure: the HUD shows less, the session goes on. */
 function quietly(work: Promise<unknown>): void {
@@ -241,6 +273,7 @@ async function sharedNow($: Engine, now: number): Promise<Shared> {
     shells: await read($, shells),
     language: language(),
     band: isBandDrawn && (await read($, band)),
+    beats: true,
   })
 }
 
@@ -251,6 +284,59 @@ async function publish($: Engine): Promise<void> {
   if (body === published) return
   published = body
   await $.fs.write(`${$.plugin.root}/state/${await $.session.id()}.json`, body)
+}
+
+/**
+ * Has the small model read the work into clauses when a reading is due (model/digest.ts says
+ * when). The brief is stamped with the time its evidence was gathered, so a request that arrives
+ * while the model reads is not taken as read. A reading that fails is not asked again until the
+ * evidence moves.
+ */
+async function readWork($: Engine): Promise<void> {
+  if (isReading || !(await read($, digest))) return
+  const a = await read($, activity)
+  const evidence = evidenceOf(a)
+  const now = await $.clock.now()
+  if (!isDue(a, evidence, { now, lastAt: readAt, lastPrint: readPrint, recent: readTimes, isReading })) return
+  isReading = true
+  readAt = now
+  readPrint = printOf(evidence)
+  readTimes = [...readTimes.filter(t => now - t < 3_600_000), now]
+  try {
+    const reply = await $.model.complete({ model: READER, system: systemOf(language()), prompt: promptOf(evidence), maxTokens: REPLY_TOKENS, effort: 'low', timeoutMs: READ_TIMEOUT_MS })
+    const briefs = reply.isAnswered ? briefsFrom(reply.text, evidence) : null
+    if (briefs === null) return
+    await update($, activity, before => st.briefed(before, briefs, now))
+    isDirty = true
+    $.ui.invalidate('ui.render')
+  } finally {
+    isReading = false
+  }
+}
+
+/** The most state files read at one look. */
+const MATES_READ_MAX = 12
+
+/** The other sessions that run binnacle: every fresh state file but this session's own, read. */
+async function refreshMates($: Engine): Promise<void> {
+  try {
+    const dir = `${$.plugin.root}/state`
+    if (!(await $.fs.exists(dir))) return
+    const now = await $.clock.now()
+    const self = await $.session.id()
+    const fresh = (await $.fs.list(dir)).filter(entry => entry.kind === 'file' && !entry.isLink && now - entry.mtimeMs <= FRESH_MS).slice(0, MATES_READ_MAX)
+    const next: Mate[] = []
+    for (const entry of fresh) {
+      const session = sessionOf(entry.name)
+      if (session === null || session === self) continue
+      const body = await $.fs.read(`${dir}/${entry.name}`)
+      const mate = typeof body === 'string' ? mateFrom(session, body, entry.mtimeMs) : null
+      if (mate !== null) next.push(mate)
+    }
+    if (JSON.stringify(next) !== JSON.stringify(await read($, mates))) await update($, mates, () => next)
+  } catch {
+    // A folder that cannot be listed shows no other session; this one goes on.
+  }
 }
 
 let pinned: string | undefined
@@ -413,6 +499,25 @@ async function loadLanguage($: Engine, chosen: string): Promise<void> {
   }
 }
 
+/** The languages Claude Code's own `language` setting names in full, as dictionary names. */
+const NAMED_LANGUAGES: Record<string, string> = { english: 'en', spanish: 'es', español: 'es', espanol: 'es', castellano: 'es' }
+
+/**
+ * The language binnacle speaks: the one its `language` option names; left at its default, the one
+ * Claude Code itself is set to speak (`language` in settings.json), when binnacle has its dictionary.
+ */
+async function spokenLanguage($: Engine): Promise<string> {
+  if (settings.language !== DEFAULT_LANGUAGE) return settings.language
+  try {
+    const said = await $.settings.read({ key: 'language' })
+    const name = typeof said === 'string' ? said.trim().toLowerCase() : ''
+    const code = NAMED_LANGUAGES[name] ?? name
+    return LANGUAGE_NAME.test(code) && code in DICTIONARIES ? code : DEFAULT_LANGUAGE
+  } catch {
+    return DEFAULT_LANGUAGE
+  }
+}
+
 /** A string field of a tool's arguments, whichever tool table the build laid. */
 function argument(e: object, key: string): string {
   const value = (e as Record<string, unknown>)[key]
@@ -424,7 +529,7 @@ export const register: Register = (on, options) => {
   useLanguage(settings.language)
 
   on('session.start', async ($, e, next) => {
-    await loadLanguage($, settings.language)
+    await loadLanguage($, await spokenLanguage($))
     quietly(pruneState($))
     await $.command.register({ name: 'binnacle', description: help() })
 
@@ -448,12 +553,15 @@ export const register: Register = (on, options) => {
     $.clock.every(1000, () => {
       tick += 1
       if (isGitStale) quietly(refreshGit($))
-      if (tick % 10 === 0) quietly(refreshPeers($).then(() => refreshLoops($)))
+      if (tick % 10 === 0) quietly(refreshPeers($).then(() => refreshLoops($)).then(() => refreshMates($)))
+      if (tick % 5 === 0) quietly(readWork($))
+      // The state file beats while the session lives: its age is how other sessions tell.
+      if (tick % (BEAT_MS / 1000) === 0) isDirty = true
       if (tick % 120 === 0 || isCiStale) quietly(refreshCi($))
       if (tick % 3600 === 0) quietly(refreshTz($))
       if (tick % 5 === 0) quietly(reconcileAgents($).then(() => watch($)).then(() => announce($)))
       // The pane says "3 min", the band "40 s": a redraw now and then keeps the clock words true.
-      if (isBandDrawn && tick % 5 === 0) $.ui.invalidate('ui.render')
+      if (isBandDrawn && (tick % 5 === 0 || isLiveStale)) $.ui.invalidate('ui.render')
       else if (tick % 15 === 0) quietly(isPaneOpen($).then(isOpen => isOpen && $.ui.invalidate('ui.render')))
       if (isDirty) quietly(publish($))
       if (tick % 5 === 0) quietly(pinStatus($))
@@ -500,6 +608,14 @@ export const register: Register = (on, options) => {
       return { text: isOn ? t('command.wakeOn') : t('command.wakeOff') }
     }
 
+    // Whether the small model reads the work into a sentence; `/binnacle digest` alone flips it.
+    if (isWord(first, ['digest'], t('command.word.digest'))) {
+      const isOn = second === '' ? !(await read($, digest)) : switchOf(second)
+      if (isOn === undefined) return { text: help() }
+      await update($, digest, () => isOn)
+      return { text: isOn ? t('command.digestOn') : t('command.digestOff') }
+    }
+
     // `/binnacle line compact`, and `/binnacle compact` alike.
     const chosen = modeOf(isWord(first, ['line'], t('command.word.line')) ? second : first)
     if (chosen === undefined) return { text: help() }
@@ -512,7 +628,9 @@ export const register: Register = (on, options) => {
   on('turn.start', ($, e, next) => {
     const id = e.turnId
     const agentId = e.agentId
-    record($, (a, at) => (agentId === undefined ? act.turnStarted(a, id, at) : act.agentTurnStarted(a, agentId, at)))
+    const asked = typeof e.text === 'string' ? e.text : ''
+    // What the turn opens with is what the loop was asked: the person's prompt, an agent's task.
+    record($, (a, at) => st.asked(agentId === undefined ? st.turnBegan(act.turnStarted(a, id, at)) : act.agentTurnStarted(a, agentId, at), agentId, asked, at))
     return next(e)
   })
 
@@ -520,13 +638,36 @@ export const register: Register = (on, options) => {
     const agentId = e.agentId
     if (agentId === undefined && typeof e.effort === 'string') effort = e.effort
     record($, (a, at) => act.stepTaken(a, agentId, at))
-    return yield* next(e)
+    // The step passes through untouched; its thinking is shown while it streams, and the words it
+    // wrote are kept when it ends: they are the loop saying what it is about to do.
+    const key = agentId ?? MAIN
+    const stream = next(e)
+    let thinking = ''
+    try {
+      for await (const chunk of stream) {
+        if (chunk.kind === 'thinking') {
+          thinking = `${thinking}${chunk.text}`.slice(-THINKING_KEPT)
+          thinks(key, thinking)
+        }
+        yield chunk
+      }
+    } finally {
+      hush(key)
+    }
+    const response = await stream.result
+    const words = typeof response?.answer === 'string' ? response.answer : ''
+    if (words.trim() !== '') record($, (a, at) => st.said(a, agentId, words, at))
+    return response
   })
 
   on('turn.complete', ($, e, next) => {
     const agentId = e.agentId
     const hasReport = e.reason === 'answer' && e.answer !== ''
-    record($, (a, at) => (agentId === undefined ? act.turnEnded(a, at) : act.agentTurnEnded(a, agentId, at, hasReport)))
+    const answer = typeof e.answer === 'string' ? e.answer : ''
+    record($, (a, at) => {
+      const ended = agentId === undefined ? act.turnEnded(a, at) : act.agentTurnEnded(a, agentId, at, hasReport)
+      return hasReport ? st.concluded(ended, agentId, answer, at) : ended
+    })
     if (agentId === undefined) isGitStale = true
     return next(e)
   })
@@ -543,7 +684,8 @@ export const register: Register = (on, options) => {
         ...(e.workflow?.runId ? { workflow: e.workflow.runId } : {}),
       }
       knownAgents.add(spawn.id)
-      record($, (a, at) => act.agentSpawned(a, { ...spawn, at }))
+      const task = typeof e.prompt === 'string' ? e.prompt : ''
+      record($, (a, at) => st.asked(act.agentSpawned(a, { ...spawn, at }), spawn.id, task, at))
     }
     return started
   })
@@ -553,7 +695,9 @@ export const register: Register = (on, options) => {
     const said = act.described(e as Record<string, unknown>)
     const start = { id: e.tool_use_id, agentId: e.agentId, tool, target: act.summarize(tool, e as Record<string, unknown>, cwd), ...(said === undefined ? {} : { said }) }
     const startedAt = $.clock.now()
-    record($, (a, at) => act.callStarted(a, { ...start, at }), startedAt)
+    const edited = act.editedFile(tool, e as Record<string, unknown>)
+    const file = edited === undefined ? undefined : act.relative(edited, cwd)
+    record($, (a, at) => st.called(act.callStarted(a, { ...start, at }), start.agentId, tool, at, file), startedAt)
     if (e.agentId !== undefined && !knownAgents.has(e.agentId)) {
       knownAgents.add(e.agentId)
       hasUnnamedAgents = true
@@ -562,8 +706,6 @@ export const register: Register = (on, options) => {
     const ran = await next(e)
 
     const endedAt = $.clock.now()
-    const edited = act.editedFile(tool, e as Record<string, unknown>)
-    const file = edited === undefined ? undefined : act.relative(edited, cwd)
     const outcome = { deny: ran.deny, isError: ran.isError, text: ran.text }
     enqueue(async () => {
       const [at, end] = await Promise.all([startedAt, endedAt])
@@ -717,7 +859,10 @@ export const register: Register = (on, options) => {
       runs: await runsOf($, await read($, shells)),
       peers: await read($, peers),
       isWorking: e.props.isWorking,
+      mates: await read($, mates),
+      live,
     }
+    isLiveStale = false
     const { bodyColumns, maxRows } = e.props
     const lines = bandLines(input, bodyColumns, maxRows)
     // Shells share their line with alerts and agents, so they show when the band would differ without them.

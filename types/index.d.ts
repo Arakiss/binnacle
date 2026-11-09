@@ -90,6 +90,50 @@ export type AgentFacts = {
   monitors?: Watch[]
 }
 
+/** A model's reading of a loop's work, each a short clause in the person's language; `at` when it was read. */
+export type Brief = { goal: string; now: string; done: string; at: number }
+
+/** A loop's calls by what they do, and the last files it edited (newest first). */
+export type Trail = { read: number; search: number; edit: number; run: number; web: number; agent: number; other: number; files: string[] }
+
+/**
+ * What a loop works on, in words: what it was asked, what it last said, how its last turn ended,
+ * the shape of its calls, and a model's reading of all of it (`brief`). model/story.ts keeps it.
+ */
+export type Story = {
+  /** What it was asked, newest last: the person's prompts (main loop), the Agent call's prompt (an agent). */
+  asks?: string[]
+  askedAt?: number
+  /** The newest words it wrote between calls. */
+  said?: string
+  saidAt?: number
+  /** How its last turn ended, in its own words: the opening of its answer. */
+  outcome?: string
+  outcomeAt?: number
+  trail?: Trail
+  brief?: Brief
+}
+
+/** An agent whose run handed its report back a moment ago: who, when, and the report's opening. */
+export type Finished = { id: string; name: string; endedAt: number; outcome: string }
+
+/**
+ * Another session that runs binnacle, as its own state file tells: where it is, whether a turn
+ * runs, and its story. `seenAt` is that file's last write.
+ */
+export type Mate = {
+  session: string
+  repo?: string
+  branch?: string
+  seenAt: number
+  turnStartedAt?: number
+  endedAt?: number
+  agents: number
+  goal?: string
+  now?: string
+  outcome?: string
+}
+
 /** An agent's newest call: what it does now while `running`, else the last thing it did. */
 export type Doing = { id: string; tool: string; text: string; at: number; running: boolean }
 
@@ -112,6 +156,7 @@ export type AgentRun = AgentFacts & {
   /** The run id of the workflow that started it; `$.agent.list()` never lists such an agent. */
   workflow?: string
   doing?: Doing
+  story?: Story
 }
 
 export type FileTouch = { path: string; edits: number; lastAt: number }
@@ -149,6 +194,8 @@ export type Activity = {
   checks: Record<string, string>
   /** Each workflow run's `meta.name`, by run id, as its Workflow call returned them; absent before any. */
   workflows?: Record<string, string>
+  /** The main loop's story; absent before its first prompt. */
+  story?: Story
 }
 
 /**
@@ -168,7 +215,7 @@ export type Shell = {
 }
 
 /** An active agent as the status line needs it: enough to say whether it works, waits or stalled. */
-export type AgentPulse = AgentFacts & { id?: string; name: string; lastAt: number; busy: number; workflow?: string; doing?: Doing }
+export type AgentPulse = AgentFacts & { id?: string; name: string; lastAt: number; busy: number; workflow?: string; doing?: Doing; story?: Story }
 
 /** What binnacle writes to ./state/<session>.json, the facts the status line and tools/liveness.ts draw from; kept small. */
 export type Shared = {
@@ -191,6 +238,14 @@ export type Shared = {
   language?: string
   /** True while the band above the prompt draws; tools/statusline.ts then stays quiet. */
   band?: boolean
+  /** The main loop's story: what the session is about, for the band and for other sessions' bands. */
+  story?: Story
+  /** Agents that reported a moment ago, newest first. */
+  finished?: Finished[]
+  /** A counter that moves twice a minute, so the file's age says the session is alive. */
+  beat?: number
+  /** The main loop's calls of the last minutes, counted in equal spans, oldest first; absent between turns. */
+  pulse?: number[]
 }
 
 declare module 'claude-code' {
@@ -213,6 +268,10 @@ declare module 'claude-code' {
       tz: number
       /** Whether a stalled agent wakes the main loop with a note (`/binnacle wake on|off`). */
       wake: boolean
+      /** Whether a small model distils each loop's work into a sentence (`/binnacle digest on|off`). */
+      digest: boolean
+      /** The other sessions that run binnacle, as their state files told at the last look. */
+      mates: Mate[]
     }
   }
 }

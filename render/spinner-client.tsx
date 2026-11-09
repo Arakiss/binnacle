@@ -6,10 +6,10 @@ import type { ClientModule } from 'claude-code'
 
 export type SpinnerProps = { colour: string }
 
-export const SPINNER_FRAMES = ['◐', '◓', '◑', '◒'] as const
+export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
 
-/** Milliseconds per frame: a quarter turn every 150 ms reads as busy without flicker. */
-const FRAME_MS = 150
+/** Milliseconds per frame: ten dots a turn, a turn in under a second, reads as busy without flicker. */
+const FRAME_MS = 90
 
 const Spinner: ClientModule<SpinnerProps, number> = (props, surface) => {
   const { Text } = surface.elements

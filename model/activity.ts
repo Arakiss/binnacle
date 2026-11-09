@@ -108,7 +108,7 @@ export function outcomeOf(
   return { outcome: 'ok' }
 }
 
-function touchAgent(agents: AgentRun[], id: string, at: number, change: (a: AgentRun) => AgentRun): AgentRun[] {
+export function touchAgent(agents: AgentRun[], id: string, at: number, change: (a: AgentRun) => AgentRun): AgentRun[] {
   const found = agents.find(a => a.id === id)
   const base: AgentRun = found ?? { id, name: id.slice(0, 8), type: '', startedAt: at, lastAt: at, actions: 0, busy: 0 }
   const next = change(base)

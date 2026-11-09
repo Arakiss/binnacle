@@ -4,7 +4,7 @@
 // usage, files and skills); one column below that, alerts first. Pure, so the hook draws it, the
 // tests read it and tools/preview.ts prints it the same way.
 
-import { currentCall, STALL_MS, who } from '../model/activity'
+import { activeAgents, currentCall, STALL_MS, who } from '../model/activity'
 import { alertsOf } from '../model/alerts'
 import { verdictOf, type Verdict } from '../model/liveness'
 import { pulses } from '../model/shared'
@@ -13,6 +13,7 @@ import { crowdOf, peerWords, untilFull } from '../model/signals'
 import type { Activity, AgentRun, Call, Ci, Git, Peer, Pr, Sample, Snapshot } from '../types'
 import { t, tn } from '../i18n'
 import { SIGN, TONE, word } from './agents'
+import { briefOf, trailWords } from './band'
 import { clock, clockSeconds, dollars, duration, limitName, percent, runTime, tokens, when } from './format'
 import { ordered, shellRow } from './shells'
 import { bar, cut, fit, sparkline, toneOf, width, type Line, type Tone } from './text'
@@ -103,6 +104,46 @@ function row(cellsOf: Cell[], total: number): Line {
 
 /** A sub-list inside a section: a blank line, then its name, dim. */
 const sublist = (name: string): Line[] => [[], dim(name)]
+
+// DE QUÉ VA
+
+/** A dim label in its column, then the words. */
+const told = (label: string, labelW: number, words: string, tone?: Tone): Line => [...dim(`${label.padEnd(labelW)}  `), { t: words, ...(tone ? { tone } : {}) }]
+
+/**
+ * What the session is about: the request as it was typed, the goal, what it does now (or how its
+ * last turn ended) and what it has so far, as the band's heading says them, uncut; then each
+ * agent at work with its goal. Empty before the session was asked anything.
+ */
+function story(input: PaneInput): Line[] {
+  const a = input.activity
+  const main = a.story
+  const ask = main?.asks?.at(-1)
+  if (main === undefined || ask === undefined) return [dim(t('band.noTurnYet'))]
+  const brief = briefOf(main)
+  const isWorking = a.turn !== null
+  const labels = [t('pane.story.asked'), t('pane.story.goal'), isWorking ? t('main.now') : t('main.result'), t('main.soFar')]
+  const w = Math.max(...labels.map(width))
+  const now = isWorking ? brief?.now || main.said : (brief !== undefined && brief.at >= (main.outcomeAt ?? 0) ? brief.now : '') || main.outcome
+  const trail = trailWords(main.trail)
+  const lines: Line[] = [
+    told(labels[0] ?? '', w, ask),
+    ...(brief?.goal ? [told(labels[1] ?? '', w, brief.goal, 'strong')] : []),
+    ...(now ? [told(labels[2] ?? '', w, now)] : []),
+    ...(brief?.done ? [told(labels[3] ?? '', w, brief.done, 'good')] : []),
+    ...(trail === '' ? [] : [dim(`${' '.repeat(w)}  ${trail}`)]),
+    ...(brief === undefined ? [] : [dim(`${' '.repeat(w)}  ${t('pane.story.read', { time: duration(input.now - brief.at) })}`)]),
+  ]
+  const agents = activeAgents(a).filter(run => run.story?.asks !== undefined)
+  for (const run of agents) {
+    const read = briefOf(run.story)
+    lines.push([], [{ t: run.name, tone: 'strong' }], told(labels[1] ?? '', w, read?.goal || run.story?.asks?.at(-1) || ''))
+    const doing = read?.now || run.story?.said
+    if (doing) lines.push(told(t('main.now'), w, doing))
+    if (read?.done) lines.push(told(labels[3] ?? '', w, read.done, 'good'))
+  }
+  return lines
+}
 
 // ACTIVIDAD DEL TURNO
 
@@ -488,6 +529,7 @@ export function paneLines(input: PaneInput, columns: number): Line[] {
   const alerts = alertLines(input)
   const warning: Section[] = alerts.length === 0 ? [] : [{ title: t('pane.section.alerts'), body: () => alerts }]
   const left: Section[] = [
+    { title: t('pane.story'), body: () => story(input) },
     { title: t('pane.section.activity'), body: cw => activity(input, cw) },
     { title: t('pane.section.agents'), body: cw => agentsAndShells(input, cw) },
     { title: t('pane.section.pr'), body: () => prAndCi(input) },

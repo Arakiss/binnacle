@@ -6,7 +6,7 @@ import type { ShellRun } from '../model/shells'
 import type { BandInput } from '../render/band'
 import type { PaneInput } from '../render/pane'
 import type { Status } from '../render/status'
-import type { Activity, Git, Peer, Sample, Shared } from '../types'
+import type { Activity, Git, Mate, Peer, Sample, Shared, Story } from '../types'
 
 export const TZ = 120
 export const NOW = Date.UTC(2026, 9, 10, 12, 5)
@@ -239,3 +239,61 @@ export function livenessPane(): PaneInput {
 export function emptyPane(): PaneInput {
   return { now: NOW, tz: TZ, activity: act.EMPTY, snapshot: null, history: {}, git: null, ci: null, pr: null, peers: [], loops: 0, shells: [] }
 }
+
+// ── Sessions that tell their story ──────────────────────────────────────────────────────────────
+
+/** What the main loop was asked, said and did three minutes into its turn, and how a small model read it. */
+export const MAIN_STORY: Story = {
+  asks: ['The status line overflows at 70 columns and the tests do not catch it. Find out why and fix it, with a test.'],
+  askedAt: NOW - 3 * MIN,
+  said: 'The cut happens before the separators are counted; measuring it at three widths.',
+  saidAt: NOW - 30_000,
+  trail: { read: 9, search: 4, edit: 2, run: 5, web: 0, agent: 2, other: 0, files: ['render/status.ts', 'render/text.ts'] },
+  brief: {
+    goal: 'Stop the status line overflowing at 70 columns',
+    now: 'Measuring the line at three widths to confirm the separator miscount',
+    done: 'Found the cut ignores separators; two fixes in place, tests not run yet',
+    at: NOW - 20_000,
+  },
+}
+
+/** WORKING with a story for the main loop and for each agent: one read by the model, one with only its own words. */
+export const TOLD: Shared = {
+  ...WORKING,
+  story: MAIN_STORY,
+  pulse: [0, 1, 3, 2, 0, 0, 1, 4, 6, 3, 1, 2],
+  agents: [
+    {
+      ...(WORKING.agents?.[0] ?? { name: 'width-audit', lastAt: NOW, busy: 0 }),
+      story: {
+        asks: ['Measure the band at 40, 70 and 120 columns against every fixture and report which lines overflow.'],
+        askedAt: NOW - 2 * MIN,
+        trail: { read: 3, search: 1, edit: 0, run: 4, web: 0, agent: 0, other: 0, files: [] },
+        brief: { goal: 'Find which band lines overflow at narrow widths', now: 'Running every fixture at 40 columns', done: '70 and 120 columns are clean', at: NOW - 15_000 },
+      },
+    },
+    {
+      ...(WORKING.agents?.[1] ?? { name: 'explore types', lastAt: NOW, busy: 0 }),
+      story: { asks: ['List every place the Shared type is read outside the hooks module.'], askedAt: NOW - 3 * MIN, said: 'Three readers so far; checking the tools folder next.', saidAt: NOW - 60_000 },
+    },
+  ],
+  finished: [{ id: 'a-docs', name: 'docs-check', endedAt: NOW - 40_000, outcome: 'The README describes the band as two lines; the options table is current.' }],
+}
+
+/** The same session five minutes after its turn ended, the end read by the model. */
+export const RESTED: Shared = {
+  ...IDLE,
+  story: {
+    ...MAIN_STORY,
+    askedAt: NOW - 17 * MIN,
+    outcome: 'Fixed: the cut now counts separators. Three new tests cover 40, 70 and 120 columns.',
+    outcomeAt: NOW - 5 * MIN,
+    brief: { goal: 'Stop the status line overflowing at 70 columns', now: 'Fixed the separator miscount and added width tests', done: 'All 248 tests pass; nothing committed', at: NOW - 5 * MIN + 6_000 },
+  },
+}
+
+/** Two other sessions that run binnacle: one at work, one that ended a turn four minutes ago. */
+export const MATES: Mate[] = [
+  { session: 'b1c2d3e4-0000', repo: 'acme', branch: 'main', seenAt: NOW - 10_000, turnStartedAt: NOW - 7 * MIN, agents: 2, goal: 'Sync the docs site with the new options', now: 'Rewriting the options table' },
+  { session: 'f0e1d2c3-9999', repo: 'shop', branch: 'feat/cart', seenAt: NOW - 20_000, endedAt: NOW - 4 * MIN, agents: 0, goal: 'Make the cart total survive a reload', outcome: 'Stored in the session; one test still fails' },
+]

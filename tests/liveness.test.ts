@@ -230,10 +230,9 @@ describe('stalled reads loud', () => {
     expect(alerts).toBe('⚠ hudwatch has waited on team-lead for 12 min')
   })
 
-  test('the band counts it in red on its second line, whatever the width', () => {
+  test('the band counts it in red, whatever the width', () => {
     for (const w of [160, 90]) {
-      const [, where] = bandLines(bandOf(STATUS, stalled, runs), w, 3)
-      const parts = where?.left.flatMap(item => item.parts) ?? []
+      const parts = bandLines(bandOf(STATUS, stalled, runs), w, 3).flatMap(line => [...line.left, ...line.right]).flatMap(item => item.parts)
       expect(parts.find(p => p.kind === 'text' && p.t.includes('1 stalled'))).toEqual(expect.objectContaining({ color: '#f7768e' }))
     }
   })

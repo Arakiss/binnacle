@@ -30,7 +30,7 @@ export type BandParts = {
 
 export function createBandView({ Box, Text, Button, Link }: BandElements, { Gauge, Spinner, onAction }: BandParts) {
   const TextRun = ({ part }: { part: TextPart }) => (
-    <Text color={part.color} backgroundColor={part.bg} bold={part.bold === true}>
+    <Text color={part.color} backgroundColor={part.bg} bold={part.bold === true} italic={part.italic === true}>
       {part.t}
     </Text>
   )

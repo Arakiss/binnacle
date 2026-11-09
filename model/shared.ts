@@ -5,12 +5,13 @@
 import type { Activity, AgentPulse, Call, Ci, Git, Mode, Peer, Reading, Sample, Shared, Shell } from '../types'
 import { activeAgents, currentCall, previousCall } from './activity'
 import { crowdOf, recent } from './signals'
+import { finishedOf, pulseOf, slim } from './story'
 
 /** Each active agent with the facts model/liveness.ts judges it by; what is unknown stays out. */
 export function pulses(a: Activity): AgentPulse[] {
   return activeAgents(a).map(run => {
     const { id, name, lastAt, busy, isTeammate, phase, phaseAt, status, reportedAt, sentAt, sentTo, heardAt, monitors, workflow, doing } = run
-    const facts = { isTeammate, phase, phaseAt, status, reportedAt, sentAt, sentTo, heardAt, monitors: monitors?.length ? monitors : undefined, workflow, doing }
+    const facts = { isTeammate, phase, phaseAt, status, reportedAt, sentAt, sentTo, heardAt, monitors: monitors?.length ? monitors : undefined, workflow, doing, story: slim(run.story) }
     const known = Object.fromEntries(Object.entries(facts).filter(([, value]) => value !== undefined))
     return { id, name, lastAt, busy, ...known }
   })
@@ -32,7 +33,12 @@ export type Values = {
   language?: string
   /** Whether the band above the prompt draws binnacle now. */
   band?: boolean
+  /** Whether the state file beats: the hooks module's does, so other sessions can tell this one lives. */
+  beats?: boolean
 }
+
+/** How often a living session's state file is rewritten. */
+export const BEAT_MS = 30_000
 
 export function shareOf(v: Values): Shared {
   const a = v.activity
@@ -43,6 +49,8 @@ export function shareOf(v: Values): Shared {
   const agents = pulses(a)
   const runIds = new Set(agents.flatMap(agent => (agent.workflow === undefined ? [] : [agent.workflow])))
   const workflows = Object.fromEntries(Object.entries(a.workflows ?? {}).filter(([id]) => runIds.has(id)))
+  const story = slim(a.story)
+  const finished = finishedOf(a, v.now)
   return {
     mode: v.mode,
     git: v.git,
@@ -58,5 +66,9 @@ export function shareOf(v: Values): Shared {
     ...(Object.keys(workflows).length > 0 ? { workflows } : {}),
     ...(v.language && v.language !== 'en' ? { language: v.language } : {}),
     ...(v.band ? { band: true } : {}),
+    ...(story === undefined ? {} : { story }),
+    ...(finished.length > 0 ? { finished } : {}),
+    ...(a.turn !== null && story !== undefined ? { pulse: pulseOf(a, v.now) } : {}),
+    ...(v.beats ? { beat: Math.floor(v.now / BEAT_MS) } : {}),
   }
 }

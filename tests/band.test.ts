@@ -2,22 +2,26 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { t, useLanguage } from '../i18n'
 
-import { at, bandLines, budgetNotices, compact, contextColour, DETAIL_ROWS, elapsedOf, isAheadOfPace, lineCells, noticesOf, PALETTE, peerWords, quotaColour, rowsOf, size, THEME, type BandLine, type Item } from '../render/band'
+import { at, bandLines, briefOf, budgetNotices, compact, contextColour, DETAIL_ROWS, elapsedOf, isAheadOfPace, lineCells, noticesOf, PALETTE, peerWords, quotaColour, rowsOf, size, THEME, type BandLine, type Item } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { CAP, easedToward, gaugeRuns } from '../render/gauge'
 import { peersFrom } from '../model/signals'
 import { drawn, STAND_INS, STILL_PARTS } from '../tools/draw'
-import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, bandOf, FILLING, IDLE, NO_REPO, NOW, RUNS, SHARED_CHECKOUT, STATUS, TZ, WORKING } from './fixtures'
+import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, bandOf, FILLING, IDLE, MAIN_STORY, MATES, NO_REPO, NOW, RESTED, RUNS, SHARED_CHECKOUT, STATUS, TOLD, TZ, WORKING } from './fixtures'
 
 const MIN = 60_000
 const DAY = 24 * 60 * MIN
 const WIDTHS = [40, 60, 90, 120, 160, 300]
 
 /** An item's text, a gauge as `[value]`, a spinner as its first frame. */
-const itemText = (item: Item | undefined) => (item?.parts ?? []).map(p => (p.kind === 'text' ? p.t : p.kind === 'gauge' ? `[${p.value}]` : '◐')).join('')
+const itemText = (item: Item | undefined) => (item?.parts ?? []).map(p => (p.kind === 'text' ? p.t : p.kind === 'gauge' ? `[${p.value}]` : '⠋')).join('')
 const items = (line: BandLine | undefined) => [...(line?.left ?? []), ...(line?.right ?? [])]
 const byKey = (lines: readonly BandLine[], key: string) => lines.flatMap(items).find(i => i.key === key)
 const cardText = (item: Item | undefined) => (item?.card ?? []).map(p => p.t).join('')
+/** A line's words: the heading's rail and any indent off, each run of spaces as two. */
+const words = (text: string) => text.replace(/^▍?\s*/, '').replace(/ {2,}/g, '  ')
+/** Whether a line is the title the other sessions sit under. */
+const isPeersTitle = (text: string) => text.includes(t('row.peersTitle'))
 
 describe('band lines', () => {
   for (const [name, input] of [
@@ -37,35 +41,37 @@ describe('band lines', () => {
     }
   }
 
-  test('line one is the model pill with its effort, then each budget as a short name, a gauge and its figure', () => {
-    const [budgets] = bandLines(bandOf(STATUS, IDLE), 160, 20)
-    expect(items(budgets).map(i => i.key)).toEqual(['model', 'ctx', 'five_hour', 'seven_day'])
-    expect(itemText(budgets?.left[0])).toBe(`${CAP.left} ✳ Opus 5.5 · high ${CAP.right}`)
-    expect(itemText(budgets?.left[1])).toBe('ctx [34] 34% 340k/1M')
-    expect(itemText(budgets?.left[2])).toBe('5h [62] 62% ↻ 15m')
-    expect(itemText(budgets?.left[3])).toBe('7d [9] 9% ↻ 4d')
+  test('the foot opens with the model pill and its effort, then each budget as a short name, a gauge and its figure', () => {
+    const foot = bandLines(bandOf(STATUS, IDLE), 160, 20).at(-1)
+    expect(items(foot).map(i => i.key)).toEqual(['model', 'ctx', 'five_hour', 'seven_day', 'session', 'repo', 'panel'])
+    expect(itemText(foot?.left[0])).toBe(`${CAP.left} ✳ Opus 5.5 · high ${CAP.right}`)
+    expect(itemText(foot?.left[1])).toBe('ctx [34] 34% 340k/1M')
+    expect(itemText(foot?.left[2])).toBe('5h [62] 62% ↻ 15m')
+    expect(itemText(foot?.left[3])).toBe('7d [9] 9% ↻ 4d')
   })
 
-  test('line two is where: the repo, the branch and its state, the session, and the band buttons on the right', () => {
-    const [, where] = bandLines(bandOf(STATUS, IDLE), 160, 20)
-    expect(itemText(where?.left[0])).toBe('acme  main ●2 ↑1')
-    expect(itemText(where?.left[1])).toBe('session 4d17h')
-    expect(where?.right.map(i => i.press)).toEqual([{ hotkey: 'p', label: 'panel', action: 'panel' }])
+  test('the foot closes with where: the session while no heading says it, the repo, the branch and its state, and the band buttons', () => {
+    const foot = bandLines(bandOf(STATUS, IDLE), 160, 20).at(-1)
+    expect(itemText(foot?.right[0])).toBe('session 4d17h')
+    expect(itemText(foot?.right[1])).toBe('acme \ue0a0 main ●2 ↑1')
+    expect(foot?.right.at(-1)?.press).toEqual({ hotkey: 'p', label: 'panel', action: 'panel' })
+    // With a heading above, how the session goes is the heading's to say.
+    expect(byKey(bandLines(bandOf(STATUS, TOLD), 160, 20), 'session')).toBeUndefined()
   })
 
   test('a detached head reads detached; other sessions in the checkout are a grey count with a card', () => {
-    const [, where] = bandLines(bandOf(AHEAD_OF_PACE, SHARED_CHECKOUT), 160, 20)
-    expect(itemText(where?.left[0])).toBe('shop  detached')
-    const crowd = byKey([where ?? { left: [], right: [] }], 'crowd')
+    const foot = bandLines(bandOf(AHEAD_OF_PACE, SHARED_CHECKOUT), 160, 20).at(-1) ?? { left: [], right: [] }
+    expect(itemText(byKey([foot], 'repo'))).toBe('shop \ue0a0 detached')
+    const crowd = byKey([foot], 'crowd')
     expect(itemText(crowd)).toBe('+3 here')
     expect(cardText(crowd)).toContain('other sessions')
   })
 
-  test('while a turn runs the session spins, with its time and actions', () => {
-    const lines = bandLines(bandOf(STATUS, WORKING), 160, 20)
-    const session = byKey(lines, 'session')
-    expect(session?.parts[0]).toEqual({ kind: 'spinner', id: 'session', colour: PALETTE.amber })
-    expect(itemText(session)).toBe('◐ working 3m · 14 actions · 2 agents')
+  test('a turn nobody asked for in words still heads the band: its call, spinning, with its time and actions', () => {
+    const [head] = bandLines(bandOf(STATUS, WORKING), 160, 20)
+    expect(head?.left[0]?.parts[2]).toEqual({ kind: 'spinner', id: 'main', colour: PALETTE.amber })
+    expect(itemText(head?.left[0])).toBe('▍ ⠋ Run the HUD tests')
+    expect(itemText(head?.right[0])).toBe('working 3m · 14 actions')
   })
 
   test('the pull request is a link with its checks; orphan loops add a reap button', () => {
@@ -76,25 +82,27 @@ describe('band lines', () => {
     expect(byKey(lines, 'reap')?.press).toEqual({ hotkey: 'r', label: 'reap 6', action: 'reap' })
   })
 
-  test('nothing asks and nothing runs: two lines and no more', () => {
-    expect(bandLines(bandOf(STATUS, IDLE), 160, 20)).toHaveLength(2)
+  test('nothing was asked and nothing runs: the foot and no more', () => {
+    expect(bandLines(bandOf(STATUS, IDLE), 160, 20)).toHaveLength(1)
   })
 
   test('the alerts keep a line of their own; an agent in trouble reads on its row, not twice', () => {
-    const [, , alerts] = bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 300, 20)
+    const alertsOf = (lines: readonly BandLine[]) => lines.find(line => line.left[0]?.key.startsWith('alert-'))
+    const alerts = alertsOf(bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 300, 20))
     expect(itemText(alerts?.left[0])).toBe('⚠ CI failing (2 of 9)')
     expect(cardText(alerts?.left[0])).toContain('gh pr checks')
     expect(items(alerts).some(i => i.key.startsWith('alert-stalled'))).toBe(false)
-    const [, , narrow] = bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 40, 20)
+    const narrow = alertsOf(bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 40, 20))
     expect(itemText(narrow?.left.at(-1))).toMatch(/^\+\d+ more$/)
   })
 
   test('every agent and shell gets a row of its own: who, how it stands and since when, and what it does', () => {
-    const lines = bandLines(bandOf(STATUS, WORKING, RUNS), 160, 20).slice(2)
+    const lines = bandLines(bandOf(STATUS, WORKING, RUNS), 160, 20).slice(1, -1)
     const texts = lines.map(line => itemText(line.left[0]))
-    expect(texts).toContain('◐ width-audit    working 20s  Bash · Measure the band at 40 columns')
-    expect(texts).toContain('◐ main           working 3m   Run the HUD tests')
-    expect(texts.some(t => /^◐ main +shell 14m +Executor · inbox redesign$/.test(t))).toBe(true)
+    expect(texts).toContain('⠋ width-audit    working 20s  Bash · Measure the band at 40 columns')
+    // The main loop has the heading; it takes no row.
+    expect(texts.some(t => /^⠋ main +working/.test(t))).toBe(false)
+    expect(texts.some(t => /^⠋ main +shell 14m +Executor · inbox redesign$/.test(t))).toBe(true)
     expect(texts.some(t => /^✗ main +exit 2 2m +Lint the plugin$/.test(t))).toBe(true)
     expect(texts.some(t => t.includes('explore types') && t.includes('thinking'))).toBe(true)
     // One column each: every row's state starts at the same cell.
@@ -160,12 +168,12 @@ describe('band lines', () => {
   test('each live session elsewhere on the bus gets a row: its callsign, where, and what it says it does', () => {
     const peer = (session: string, intent: string | null, liveness = 'live') => ({ session, harness: 'claude-code', place: 'shop', repo: '/w/shop', branch: null, intent, liveness, lastMs: NOW - 25 * MIN })
     const input = { ...bandOf(STATUS, IDLE), peers: [peer('s1', 'Vesper: wrapping up; #3155 and #3152 left'), peer('s2', null), peer('s3', 'Old: nothing', 'stale')] }
-    const texts = bandLines(input, 160, 20).slice(2).map(line => itemText(line.left[0]))
+    const texts = bandLines(input, 160, 20).slice(0, -1).map(line => itemText(line.left[0]))
     expect(texts).toEqual(['◆ Vesper          shop 25m  wrapping up; #3155 and #3152 left', '◆ claude-code s2  shop 25m  no stated intent'])
     expect(peerWords(peer('x', 'no name up front'))).toEqual({ name: 'claude-code x', mission: 'no name up front' })
     // A state wider than its column is cut, so what each row does still starts at the same cell.
     const long = { ...input, peers: [{ ...peer('s4', 'Longer: some'), repo: '/w/a-repository-with-a-long-name' }, peer('s1', 'Vesper: short')] }
-    const aligned = bandLines(long, 160, 20).slice(2).map(line => itemText(line.left[0]))
+    const aligned = bandLines(long, 160, 20).slice(0, -1).map(line => itemText(line.left[0]))
     expect(new Set(aligned.map(t => t.search(/ {2}(some|short)$/))).size).toBe(1)
   })
 
@@ -192,30 +200,33 @@ describe('band lines', () => {
     const other = { session: 's1', harness: 'codex', place: 'shop', repo: '/w/shop', branch: null, intent: 'Juniper: cut the release', liveness: 'live', lastMs: NOW - MIN }
     const shell = (label: string, age: number) => ({ label, startedAt: NOW - age * MIN, state: 'running' as const, quietSince: NOW - 5_000 })
     const own = [shell('Wait for PR 3186', 2)]
-    const textsOf = (input: Parameters<typeof bandLines>[0], rows: number) => bandLines(input, 160, rows).slice(2).map(line => itemText(line.left[0]))
+    const textsOf = (input: Parameters<typeof bandLines>[0], rows: number) => bandLines(input, 160, rows).slice(0, -1).map(line => itemText(line.left[0]))
     const mixed = { ...bandOf(STATUS, IDLE, own), peers: [other] }
     const lines = textsOf(mixed, 20)
-    const title = lines.indexOf(t('row.peersTitle'))
+    const title = lines.findIndex(isPeersTitle)
     expect(title).toBeGreaterThan(0)
+    // The title is a rule across the band.
+    expect(lines[title]).toMatch(/^── .* ─+$/)
+    expect([...(lines[title] ?? '')].length).toBe(160)
     expect(lines[title + 1]).toStartWith('◆ Juniper')
     expect(lines.slice(0, title).some(line => line.startsWith('◆'))).toBe(false)
     // Only other sessions: nothing to tell apart, so no title.
-    expect(textsOf({ ...bandOf(STATUS, IDLE), peers: [other] }, 20)).not.toContain(t('row.peersTitle'))
+    expect(textsOf({ ...bandOf(STATUS, IDLE), peers: [other] }, 20).some(isPeersTitle)).toBe(false)
     // Two rows of room: both rows, no title.
-    expect(textsOf(mixed, 4)).toHaveLength(2)
-    expect(textsOf(mixed, 4)).not.toContain(t('row.peersTitle'))
+    expect(textsOf(mixed, 3)).toHaveLength(2)
+    expect(textsOf(mixed, 3).some(isPeersTitle)).toBe(false)
     // Short of room the other session is counted rather than drawn, and its title gives the line back to this session's rows.
     const crowded = { ...bandOf(STATUS, IDLE, [shell('Build the site', 1), shell('Run the e2e suite', 2), shell('Watch the deploy', 3)]), peers: [other] }
-    const tight = textsOf(crowded, 5)
+    const tight = textsOf(crowded, 4)
     expect(tight).toHaveLength(3)
-    expect(tight).not.toContain(t('row.peersTitle'))
-    expect(tight.filter(line => line.startsWith('◐'))).toHaveLength(2)
+    expect(tight.some(isPeersTitle)).toBe(false)
+    expect(tight.filter(line => line.startsWith('⠋'))).toHaveLength(2)
     expect(tight[2]).toStartWith('+2')
     // The title is the active language's.
     try {
       useLanguage('es')
-      expect(t('row.peersTitle')).not.toBe(lines[title])
-      expect(textsOf(mixed, 20)).toContain(t('row.peersTitle'))
+      expect(isPeersTitle(lines[title] ?? '')).toBe(false)
+      expect(textsOf(mixed, 20).some(isPeersTitle)).toBe(true)
     } finally {
       useLanguage('en')
     }
@@ -223,8 +234,8 @@ describe('band lines', () => {
 
   test('the main loop between calls says the last thing it did', () => {
     const shared = { ...WORKING, turn: { startedAt: NOW - 3 * MIN, actions: 14, denials: 0, tool: null, previous: 'Leer el panel' } }
-    const main = rowsOf(bandOf(STATUS, shared, RUNS), shared).find(r => r.kind === 'main')
-    expect(main?.what[0]?.t).toBe('thinking · last: Leer el panel')
+    const [head] = bandLines(bandOf(STATUS, shared, RUNS), 160, 20)
+    expect(itemText(head?.left[0])).toBe('▍ ⠋ thinking · last: Leer el panel')
   })
 
   test('the most urgent rows come first: a stall, then a failing shell, then the work', () => {
@@ -237,15 +248,17 @@ describe('band lines', () => {
   test('short of rows, the least urgent go and one row counts them; with none to spare, one row sums them up', () => {
     const lines = bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 160, 5)
     expect(lines).toHaveLength(5)
-    expect(itemText(lines[3]?.left[0])).toContain('explore types')
-    expect(itemText(lines[4]?.left[0])).toMatch(/^\+6 more: 1 agent, 4 shells, main · p opens the panel$/)
+    // The heading, the alerts, one row, the count of the rest, the foot.
+    expect(itemText(lines[2]?.left[0])).toContain('explore types')
+    expect(itemText(lines[3]?.left[0])).toMatch(/^\+5 more: 1 agent, 4 shells · p opens the panel$/)
+    expect(byKey([lines[4] ?? { left: [], right: [] }], 'ctx')).toBeDefined()
     const one = bandLines(bandOf(ALERT_STATUS, ALERTS, RUNS), 160, 4)
-    expect(itemText(one[3]?.left[0])).toBe('2 agents, 4 shells, main · p opens the panel')
+    expect(itemText(one[2]?.left[0])).toBe('2 agents, 4 shells · p opens the panel')
   })
 
   test('a narrow band still names every agent, and no row outgrows it', () => {
     for (const columns of [40, 60]) {
-      const lines = bandLines(bandOf(STATUS, WORKING, RUNS), columns, 20).slice(2)
+      const lines = bandLines(bandOf(STATUS, WORKING, RUNS), columns, 20).slice(1, -1)
       const texts = lines.map(line => itemText(line.left[0]))
       expect(texts.some(t => t.includes('widt'))).toBe(true)
       expect(texts.some(t => t.includes('expl'))).toBe(true)
@@ -386,8 +399,8 @@ describe('band view', () => {
       expect(rows).toHaveLength(lines.length)
       for (const row of rows) expect([...row].length).toBeLessThanOrEqual(columns)
     }
-    const [, where] = drawn(Band({ lines: bandLines(bandOf(STATUS, IDLE), 160, 20), columns: 160 }), true)
-    expect(where).toMatch(/^acme  main ●2 ↑1 {3}session 4d17h +p: panel$/)
+    const foot = drawn(Band({ lines: bandLines(bandOf(STATUS, IDLE), 160, 20), columns: 160 }), true).at(-1)
+    expect(foot).toMatch(/7d .*9% ↻ 4d +session 4d17h {3}acme  main ●2 ↑1 {3}p: panel$/)
   })
 
   test('a card is drawn hidden under its item, shown by the surface while the pointer is on it', () => {
@@ -405,5 +418,130 @@ describe('band view', () => {
     expect(cards.length).toBeGreaterThanOrEqual(5)
     for (const card of cards) expect(card).toEqual(expect.objectContaining({ position: 'absolute', top: 1, hover: { display: 'flex' } }))
     expect(boxes.filter(props => props.key === 'ctx')).toHaveLength(1)
+  })
+})
+
+describe('the heading: what the session is about', () => {
+  const textOf = (line: BandLine | undefined) => words(itemText(line?.left[0]))
+  const told = (rows = 20, columns = 160) => bandLines({ ...bandOf(STATUS, TOLD, RUNS), mates: MATES }, columns, rows)
+
+  test('at work it reads the goal with how the turn goes, what it does now with the call that runs, and what it has so far', () => {
+    const [goal, now, soFar] = told(20, 220)
+    expect(textOf(goal)).toBe('⠋ Stop the status line overflowing at 70 columns')
+    // Beside how the turn goes, its pulse: the calls of the last minutes, span by span.
+    expect(itemText(goal?.right[0])).toBe('▁▂▅▃▁▁▂▆█▅▂▃ working 3m · 14 actions')
+    expect(cardText(goal?.left[0])).toBe(`asked: ${MAIN_STORY.asks?.[0]}`)
+    expect(textOf(now)).toBe('now  Measuring the line at three widths to confirm the separator miscount  ▸ Run the HUD tests')
+    expect(textOf(soFar)).toBe('so far  Found the cut ignores separators; two fixes in place, tests not run yet  9 reads · 4 searches · 2 edits in status.ts, text.ts · 5 commands · 2 agents started')
+    expect([goal, now, soFar].map(line => line?.tight === true)).toEqual([false, true, true])
+  })
+
+  test('until a model has read the work, the request is the goal and the loop\'s own last words are what it does', () => {
+    const { brief: _brief, ...unread } = MAIN_STORY
+    const [goal, now] = bandLines(bandOf(STATUS, { ...TOLD, story: unread }), 200, 20)
+    expect(textOf(goal)).toBe(`⠋ ${MAIN_STORY.asks?.[0]}`)
+    expect(textOf(now)).toBe(`now  ${MAIN_STORY.said}  ▸ Run the HUD tests`)
+  })
+
+  test('a reading of the request before this one is of another task: the new request stands until it is read', () => {
+    const story = { ...MAIN_STORY, asks: ['Now rename the option'], askedAt: NOW - 5_000 }
+    expect(briefOf(story)).toBeUndefined()
+    expect(briefOf(MAIN_STORY)).toBe(MAIN_STORY.brief)
+    expect(textOf(bandLines(bandOf(STATUS, { ...TOLD, story }), 160, 20)[0])).toBe('⠋ Now rename the option')
+  })
+
+  test('with no call running, the thought that streams is the pulse; with no words at all, it stands alone', () => {
+    const quiet = { ...TOLD, turn: { startedAt: NOW - 3 * MIN, actions: 14, denials: 0, tool: null } }
+    const live = { main: { thinking: 'the separators are counted after the cut' } }
+    expect(textOf(bandLines({ ...bandOf(STATUS, quiet), live }, 200, 20)[1])).toBe(`now  ${MAIN_STORY.brief?.now}  ∴ the separators are counted after the cut`)
+    const wordless = { ...quiet, story: { asks: MAIN_STORY.asks, askedAt: MAIN_STORY.askedAt } }
+    expect(textOf(bandLines({ ...bandOf(STATUS, wordless), live }, 200, 20)[1])).toBe('now  ∴ the separators are counted after the cut')
+    expect(textOf(bandLines(bandOf(STATUS, wordless), 200, 20)[1])).toBe('now  thinking')
+  })
+
+  test('between turns it reads how the last one ended: the model\'s reading of the end, or the answer\'s own opening until it has one', () => {
+    const [goal, result, soFar] = bandLines(bandOf(STATUS, RESTED), 160, 20)
+    expect(textOf(goal)).toBe('◆ Stop the status line overflowing at 70 columns')
+    expect(itemText(goal?.right[0])).toBe('ended 5m ago')
+    expect(textOf(result)).toBe('result  Fixed the separator miscount and added width tests')
+    expect(textOf(soFar)).toStartWith('so far  All 248 tests pass; nothing committed')
+    // The reading on screen was made before the turn ended: the answer speaks for itself.
+    const stale = { ...RESTED, story: { ...RESTED.story, brief: MAIN_STORY.brief && { ...MAIN_STORY.brief, at: NOW - 6 * MIN } } }
+    const lines = bandLines(bandOf(STATUS, stale), 160, 20)
+    expect(textOf(lines[1])).toBe('result  Fixed: the cut now counts separators. Three new tests cover 40, 70 and 120 columns.')
+    expect(lines).toHaveLength(3)
+  })
+
+  test('the goal keeps its line: how the turn goes sits beside it only while the whole goal fits', () => {
+    expect(itemText(told(20, 100)[0]?.right[0])).toBe('▁▂▅▃▁▁▂▆█▅▂▃ working 3m · 14 actions')
+    expect(itemText(told(20, 80)[0]?.right[0])).toBe('working 3m · 14 actions')
+    expect(itemText(told(20, 66)[0]?.right[0])).toBe('working 3m')
+    const narrow = told(20, 50)[0]
+    expect(narrow?.right).toEqual([])
+    expect(textOf(narrow)).toBe('⠋ Stop the status line overflowing at 70 columns')
+    for (const columns of WIDTHS) for (const line of told(20, columns)) expect(lineCells(line)).toBeLessThanOrEqual(columns)
+  })
+
+  test('each agent\'s row says what it is on, in words, with its call as the pulse; with rows to spare, its goal and what it has so far sit under it', () => {
+    const texts = told().map(textOf)
+    const audit = texts.findIndex(t => t.includes('width-audit'))
+    expect(texts[audit]).toBe('⠋ width-audit  working 20s  Running every fixture at 40 columns  ▸ Bash · Measure the band at 40 columns')
+    expect(texts[audit + 1]).toBe('╰ Find which band lines overflow at narrow widths · so far: 70 and 120 columns are clean · 3 reads · 1 search · 4 commands')
+    // One no model has read yet speaks in its own last words, under the task it was given.
+    const types = texts.findIndex(t => t.includes('explore types'))
+    expect(texts[types]).toBe('⠋ explore types  working 3m  Three readers so far; checking the tools folder next.')
+    expect(texts[types + 1]).toBe('╰ List every place the Shared type is read outside the hooks module.')
+    // Short of rows the second lines go first, all of them, and then the heading's third line.
+    const tight = told(13).map(textOf)
+    expect(tight.some(t => t.startsWith('╰'))).toBe(false)
+    expect(tight.some(t => t.startsWith('so far'))).toBe(true)
+    expect(told(12).map(textOf).some(t => t.startsWith('so far'))).toBe(false)
+  })
+
+  test('an agent that stands still says why, then what it was on', () => {
+    const idle = { ...(TOLD.agents?.[0] ?? { name: 'x', lastAt: NOW }), busy: 0, isTeammate: true, phase: 'idle' as const, phaseAt: NOW - 4 * MIN, status: 'idle', doing: undefined }
+    const shared = { ...TOLD, agents: [idle] }
+    const row = rowsOf(bandOf(STATUS, shared), shared).find(r => r.who === 'width-audit')
+    expect(row?.what.map(p => p.t).join('')).toBe('idle with nothing to wake it · Find which band lines overflow at narrow widths')
+    expect(row?.what[0]?.color).toBe(PALETTE.red)
+  })
+
+  test('an agent that reported a moment ago keeps a row with how its report opened', () => {
+    expect(told().map(textOf)).toContain('✓ docs-check  reported 40s  The README describes the band as two lines; the options table is current.')
+  })
+
+  test('other sessions that run binnacle come last, under their title, each with its goal and what it does or how it ended', () => {
+    const texts = told().map(textOf)
+    const title = texts.findIndex(isPeersTitle)
+    expect(texts.slice(title + 1, title + 3)).toEqual([
+      '⠋ acme  working 7m  Sync the docs site with the new options  ▸ Rewriting the options table',
+      '◆ shop  ended 4m ago  Make the cart total survive a reload  ✓ Stored in the session; one test still fails',
+    ])
+    expect(byKey(told(), 'model')).toBeDefined()
+    expect(title + 3).toBe(texts.length - 1)
+  })
+
+  test('a session the sessions command also lists gets one row: the command names it, its own state file tells its story', () => {
+    const peer = { session: 'b1c2d3e4', displayName: 'Vesper', harness: 'claude-code', place: 'acme', repo: '/home/dev/acme', branch: 'main', intent: null, liveness: 'live', lastMs: NOW }
+    const other = { ...peer, session: 'zzzz', displayName: 'Juniper', intent: 'cutting the release' }
+    const input = { ...bandOf(STATUS, IDLE), mates: MATES, peers: [peer, other] }
+    const rows = rowsOf(input, IDLE).filter(r => r.kind === 'peer')
+    expect(rows.map(r => r.who)).toEqual(['Vesper', 'shop', 'Juniper'])
+    expect(rows[0]?.what.map(p => p.t).join('')).toBe('acme · Sync the docs site with the new options  ▸ Rewriting the options table')
+    expect(rows[2]?.what[0]?.t).toBe('cutting the release')
+  })
+
+  test('the heading speaks Spanish from its dictionary when chosen', () => {
+    try {
+      useLanguage('es')
+      const [goal, now, soFar] = told(20, 220)
+      expect(itemText(goal?.right[0])).toEndWith(' trabajando 3m · 14 acciones')
+      expect(textOf(now)).toStartWith('ahora  ')
+      expect(textOf(soFar)).toContain('9 lecturas · 4 búsquedas · 2 ediciones en status.ts, text.ts · 5 órdenes · 2 agentes lanzados')
+      expect(textOf(bandLines(bandOf(STATUS, RESTED), 160, 20)[1])).toStartWith('resultado  ')
+      expect(itemText(bandLines(bandOf(STATUS, RESTED), 160, 20)[0]?.right[0])).toBe('terminó hace 5m')
+    } finally {
+      useLanguage('en')
+    }
   })
 })

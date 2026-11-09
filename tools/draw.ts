@@ -64,15 +64,16 @@ const isNode = (value: unknown): value is Node => typeof value === 'object' && v
 
 const widthOf = (runs: readonly Run[]) => runs.reduce((n, r) => n + [...r.t].length, 0)
 
-type Style = { fg?: string; bg?: string; bold?: boolean }
+type Style = { fg?: string; bg?: string; bold?: boolean; italic?: boolean }
 
-const sgrOf = (style: Style) => [style.bold ? '1' : '', style.fg ? `38;${style.fg}` : '', style.bg ? `48;${style.bg}` : ''].filter(Boolean).join(';') || '0'
+const sgrOf = (style: Style) => [style.bold ? '1' : '', style.italic ? '3' : '', style.fg ? `38;${style.fg}` : '', style.bg ? `48;${style.bg}` : ''].filter(Boolean).join(';') || '0'
 
 function textRuns(node: Node, inherited: Style): Run[] {
   const style: Style = {
     fg: colourCode(node.props.color) ?? inherited.fg,
     bg: colourCode(node.props.backgroundColor) ?? inherited.bg,
     bold: node.props.bold === true || (node.props.bold === undefined && inherited.bold === true),
+    italic: node.props.italic === true || (node.props.italic === undefined && inherited.italic === true),
   }
   return node.children.flatMap(child => (isNode(child) ? textRuns(child, style) : [{ t: String(child), sgr: sgrOf(style) }]))
 }

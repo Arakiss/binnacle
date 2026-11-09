@@ -16,7 +16,7 @@ import { statusLines, type Status } from '../render/status'
 import { paint, plainText, type Line } from '../render/text'
 import type { Shared } from '../types'
 import { lineOf, rowsOf } from '../render/report'
-import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, API_KEY, bandOf, busyPane, IDLE, LIVE_RUNS, livenessPane, livenessShared, NO_REPO, NOW, RUNS, SHARED_CHECKOUT, STATUS, TZ, WORKING } from '../tests/fixtures'
+import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, API_KEY, bandOf, busyPane, IDLE, LIVE_RUNS, livenessPane, livenessShared, MATES, NO_REPO, NOW, RESTED, RUNS, SHARED_CHECKOUT, STATUS, TOLD, TZ, WORKING } from '../tests/fixtures'
 import { drawn, installFactory, STAND_INS, STILL_PARTS } from './draw'
 
 const columns = Number(process.argv[2] ?? 120)
@@ -32,6 +32,8 @@ const FIXTURES: Record<string, [Status, Shared]> = {
   'no-repo': [STATUS, NO_REPO],
   'api-key': [API_KEY, IDLE],
   'shared-checkout': [AHEAD_OF_PACE, SHARED_CHECKOUT],
+  told: [STATUS, TOLD],
+  rested: [STATUS, RESTED],
 }
 
 if (which === 'liveness') {
@@ -54,7 +56,8 @@ if (which === 'liveness') {
   const { Band } = createBandView(STAND_INS, STILL_PARTS)
   const maxRows = Number(words[1] ?? 12)
   for (const [name, [status, shared]] of Object.entries(FIXTURES)) {
-    const lines = bandLines(bandOf(status, shared, shared.turn ? RUNS : []), columns, maxRows)
+    // The storied fixtures draw beside two other sessions, as a fleet would.
+    const lines = bandLines({ ...bandOf(status, shared, shared.turn ? RUNS : []), ...(shared.story ? { mates: MATES } : {}) }, columns, maxRows)
     console.log(`── band · ${name} @ ${columns}×${maxRows}`)
     console.log(drawn(Band({ lines, columns }), isPlain).join('\n'))
   }
