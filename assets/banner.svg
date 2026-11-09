@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320">
-  <!-- binnacle README banner. Fonts: JetBrains Mono and FiraCode Nerd Font Mono; render with
+  <!-- binnacle README banner. Fonts: JetBrains Mono and JetBrainsMono Nerd Font Mono; render with
        `rsvg-convert -w 2560 assets/banner.svg -o assets/banner.png`. Colours: Tokyo Night. -->
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="1" y2="0">
@@ -56,23 +56,33 @@
   <text x="236" y="170" font-family="JetBrains Mono" font-weight="700" font-size="74" letter-spacing="-2" fill="#c0caf5">binnacle</text>
   <text x="240" y="212" font-family="JetBrains Mono" font-weight="500" font-size="15" letter-spacing="3.6" fill="#737aa2">A HEADS-UP DISPLAY FOR CLAUDE CODE</text>
 
-  <!-- A glance at the band: budgets, then a row per agent and shell -->
-  <g font-family="FiraCode Nerd Font Mono" font-size="16">
-    <rect x="700" y="70" width="532" height="180" rx="12" fill="#16161e" stroke="#292e42" stroke-width="1.5"/>
+  <!-- A glance at the band: the heading (goal, now, so far) on its rail, then a row per agent -->
+  <g font-family="JetBrainsMono Nerd Font Mono" font-size="15">
+    <rect x="690" y="52" width="548" height="216" rx="12" fill="#16161e" stroke="#292e42" stroke-width="1.5"/>
 
-    <text x="726" y="110" fill="#737aa2">ctx</text>
-    <rect x="768" y="98" width="110" height="14" rx="7" fill="#3b4261"/>
-    <rect x="768" y="98" width="38" height="14" rx="7" fill="#7dcfff"/>
-    <text x="888" y="110" fill="#c0caf5">34%</text>
-    <text x="956" y="110" fill="#737aa2">5h</text>
-    <rect x="988" y="98" width="110" height="14" rx="7" fill="#3b4261"/>
-    <rect x="988" y="98" width="68" height="14" rx="7" fill="#e0af68"/>
-    <text x="1108" y="110" fill="#e0af68">62% ▲</text>
+    <rect x="714" y="76" width="4" height="28" fill="#bb9af7"/>
+    <rect x="714" y="104" width="4" height="28" fill="#7aa2f7"/>
+    <rect x="714" y="132" width="4" height="28" fill="#7dcfff"/>
 
-    <line x1="720" y1="128" x2="1212" y2="128" stroke="#292e42"/>
+    <text x="730" y="96"><tspan fill="#e0af68">⠹</tspan><tspan x="750" font-family="JetBrains Mono" font-weight="700" fill="#ffffff">Stop the overflow at 70 columns</tspan></text>
+    <g fill="#e0af68">
+      <rect x="1118" y="92" width="7" height="4"/><rect x="1126" y="88" width="7" height="8"/><rect x="1134" y="82" width="7" height="14"/>
+      <rect x="1142" y="86" width="7" height="10"/><rect x="1150" y="93" width="7" height="3"/><rect x="1158" y="93" width="7" height="3"/>
+      <rect x="1166" y="90" width="7" height="6"/><rect x="1174" y="80" width="7" height="16"/><rect x="1182" y="76" width="7" height="20"/>
+      <rect x="1190" y="84" width="7" height="12"/><rect x="1198" y="90" width="7" height="6"/><rect x="1206" y="87" width="7" height="9"/>
+    </g>
 
-    <text x="726" y="160"><tspan font-size="21" fill="#7aa2f7">◐</tspan><tspan x="752" fill="#c0caf5">width-audit</tspan><tspan x="900" fill="#7aa2f7">working 20s</tspan><tspan x="1030" fill="#737aa2">Bash · tests</tspan></text>
-    <text x="726" y="194"><tspan font-size="21" fill="#f7768e">✖</tspan><tspan x="752" fill="#c0caf5">explore types</tspan><tspan x="900" fill="#f7768e">stalled 12m</tspan><tspan x="1030" fill="#737aa2">nothing wakes it</tspan></text>
-    <text x="726" y="228"><tspan font-size="21" fill="#e0af68">◓</tspan><tspan x="752" fill="#c0caf5">main</tspan><tspan x="900" fill="#737aa2">shell 6m</tspan><tspan x="1030" fill="#737aa2">dev server</tspan></text>
+    <rect x="750" y="108" width="78" height="22" fill="#292e42"/>
+    <text x="760" y="124" fill="#a9b1d6">now</text>
+    <text x="844" y="124"><tspan fill="#c0caf5">Measuring it at three widths</tspan><tspan dx="14" fill="#7dcfff">▸</tspan><tspan dx="6" fill="#737aa2">run tests</tspan></text>
+
+    <rect x="750" y="136" width="78" height="22" fill="#292e42"/>
+    <text x="760" y="152" fill="#a9b1d6">so far</text>
+    <text x="844" y="152" fill="#9ece6a">Found the miscount; two fixes in place</text>
+
+    <line x1="710" y1="178" x2="1218" y2="178" stroke="#292e42"/>
+
+    <text x="714" y="210"><tspan fill="#bb9af7">⠹</tspan><tspan x="736" font-weight="700" fill="#c0caf5">width-audit</tspan><tspan x="868" fill="#737aa2">working 20s</tspan><tspan x="990" fill="#c0caf5">Running every fixture</tspan></text>
+    <text x="714" y="242"><tspan fill="#f7768e">✖</tspan><tspan x="736" fill="#f7768e">explore types</tspan><tspan x="868" fill="#f7768e">stalled 12m</tspan><tspan x="990" fill="#f7768e">nothing wakes it</tspan></text>
   </g>
 </svg>

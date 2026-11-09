@@ -37,6 +37,12 @@ export const STILL_PARTS: BandParts = {
   onAction: () => undefined,
 }
 
+/** The animated parts caught mid-motion, for tools/demo.ts: every spinner at `frame`, the gauges at their values. */
+export const partsAt = (frame: number): BandParts => ({
+  ...STILL_PARTS,
+  Spinner: ({ part }: { part: SpinnerPart }) => element('Client')({ module: 'spinner', props: { colour: part.colour, frame } }) as unknown as RenderElement,
+})
+
 // The engine's factory calls a component with its props and the children beside them.
 const factory = (tag: unknown, props: Record<string, unknown> | null, ...children: unknown[]) =>
   typeof tag === 'function' ? (tag as (p: Record<string, unknown>) => unknown)({ ...(props ?? {}), children }) : null
@@ -84,7 +90,8 @@ function clientRuns(node: Node): Run[] {
   if (typeof props.inner === 'number') {
     return gaugeRuns(Number(props.value), props.inner, String(props.colour), String(props.track)).map(run => ({ t: run.t, sgr: sgrOf({ fg: colourCode(run.fg), bg: colourCode(run.bg) }) }))
   }
-  return [{ t: SPINNER_FRAMES[0], sgr: sgrOf({ fg: colourCode(props.colour) }) }]
+  const frame = typeof props.frame === 'number' ? props.frame : 0
+  return [{ t: SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0], sgr: sgrOf({ fg: colourCode(props.colour) }) }]
 }
 
 /** Whether a node takes room in its row: a hidden or absolutely placed Box does not. */

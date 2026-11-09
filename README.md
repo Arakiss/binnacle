@@ -16,17 +16,19 @@
 
 ---
 
-When a Claude Code session runs a dozen subagents, a workflow and a few background shells at
-once, the transcript stops telling you who is doing what, and a tool call's name does not tell
-you either. binnacle draws a band above the prompt that says what is being worked on: the
-session's goal, what it does now and what it has so far, then one row per agent, workflow, shell
-and other session, each with what it is on, in words.
+A Claude Code session that runs a few subagents, a workflow and some background shells stops
+telling you who is doing what. The transcript scrolls, and a tool call's name ("Bash", "Read")
+says which tool ran, not what the work is.
+
+binnacle draws a band above the prompt that answers the question you actually have: **what is
+being worked on?** The session's goal, what it does at this moment and what it has so far; then
+one row for every agent, shell and other session, each saying what it is on.
 
 <p align="center">
-  <img src="assets/band.png" alt="The binnacle band above the Claude Code prompt: model, context and quota gauges, the branch, then a row for each of three subagents at work and a background shell" width="100%">
+  <img src="assets/demo.gif" alt="The binnacle band through one session: a request is typed, the model's thinking streams under it, a small model reads the work into a goal, two agents start and report, another session shows up, and the turn ends with its result" width="100%">
 </p>
 
-<p align="center"><sub>A session at work: its goal, what it does now and what it has so far; two agents with theirs; shells; two other sessions.</sub></p>
+<p align="center"><sub>One session, start to end. The session is scripted (<code>tools/demo.ts</code>); every frame is drawn by the band's own code.</sub></p>
 
 *binnacle*: the housing in front of a ship's helm that holds the compass, lit at night so the
 helmsman can read it at a glance.
@@ -45,36 +47,85 @@ Answer `y` to add the marketplace, then pick a scope. Or from a shell:
 claude plugin install binnacle --marketplace Arakiss/binnacle
 ```
 
-The band appears above the prompt in the next session. Press `p` (or run `/binnacle`) for the
-status pane. The band uses a few [Nerd Font](https://www.nerdfonts.com/) glyphs; any Nerd Font
-in your terminal covers them.
+The band appears above the prompt in the next session, with nothing to configure. It uses a few
+[Nerd Font](https://www.nerdfonts.com/) glyphs; any Nerd Font in your terminal covers them.
 
-## What it shows
+## Reading the band
 
-| Part | What you get |
+<p align="center">
+  <img src="assets/band.png" alt="The band while a turn runs: the heading with the goal, what the session does now and what it has so far; a row per agent with a second line for its goal; background shells; an agent that just reported; another session; and the foot with the model, the budgets and the branch" width="100%">
+</p>
+
+**The heading** is the session itself, on a coloured rail:
+
+- the **goal**, in bold: what the session is trying to achieve. On its right, a pulse of the
+  calls of the last three minutes, how long the turn has run and how many actions it took.
+- **now**: what it is doing at this moment. Beside it, dim, the call that runs right now; with no
+  call running, the model's thinking as it streams, in italics.
+- **so far**: what it has achieved or found, in green, then its calls by kind ("9 reads · 2 edits
+  in status.ts").
+
+**The rows** are everything else that works for you, most urgent first:
+
+| Row | What it says |
 |---|---|
-| **The heading** | What the session is about: its goal, what it does at this moment (with the call that runs, or the thought that streams, as its pulse) and what it has so far; between turns, how the last one ended. |
-| **A row per agent and shell** | Working, waiting, stalled, unknown or done, and what it is on in words; with rows to spare, a second line with its goal and what it has so far. An agent that just reported keeps a row with how its report opens. A workflow's agents share one row under the workflow's name; a shell whose output stopped changing says so. |
-| **Other sessions** | Every other session that runs binnacle gets a row with its goal and what it does now, with nothing to configure. |
-| **Budgets** | Model and effort, the context window, the five-hour and weekly quotas as gauges. A quota you burn faster than the clock turns amber; one that will run out before it resets says when. |
-| **Where you are** | Repository, branch, uncommitted and unpushed work, the pull request and its checks, how long the session has run. |
-| **Stalls** | An agent that goes idle with nothing left that will wake it is marked stalled, told once before it idles, and can wake the main loop with a note (`/binnacle wake on`). |
-| **Alerts** | Failing CI, actions denied this turn, other sessions writing in the same checkout. |
-| **Status pane** | The turn's calls with their results, each refusal with its reason, agents and shells, pull request and CI, usage with sparklines, compactions, edited files and loaded skills. |
+| An agent | How it stands (working, waiting, stalled, unknown) and since when, then what it is on, in words. With rows to spare, a second line with its goal and what it has so far. |
+| An agent that just reported | Stays three minutes with how its report opens, so a result does not vanish with its row. |
+| A workflow | Its agents share one row under the workflow's name; one in trouble keeps a row of its own. |
+| A background shell | Its label and age; one whose output stopped changing says since when, one launched twice says so. |
+| Another session | Under its own rule: its goal, and what it does now or how its last turn ended. |
 
-## Why binnacle
+**The foot** holds what you check now and then: the model and its effort, the context window and
+each quota as a gauge (amber when you burn it faster than the clock, red with a time when it will
+run out before it resets), the repo and branch, the pull request with its checks, and the band's
+buttons.
 
-Claude Code shows the agents it runs as a list you open, and a background shell as a count under
-the prompt. binnacle keeps the whole crew on screen while you type:
+Between turns the heading keeps the goal and says how the last turn ended, so a terminal you come
+back to tells you what it was doing and where it left off:
+
+<p align="center">
+  <img src="assets/rested.png" alt="The band between turns: the goal, the result of the last turn, what it achieved, and another session still at work" width="100%">
+</p>
+
+Every line drops detail until it fits; nothing wraps, at 40 columns or at 300. Short of rows, the
+band keeps the goal and what the session does now, then the foot, the alerts and the rows.
+
+## Where the words come from
+
+A small model reads the work. Every so often binnacle hands the smallest Claude model (`haiku`)
+what each loop was asked, the last words it wrote, its recent calls by their description and the
+reading before, and gets back three short clauses per loop: its goal, what it does now, what it
+has so far. Until the first reading arrives, the request itself is the goal and the loop's own
+last words say what it does, so the band never waits on it.
+
+It is frugal by rule, not by hope:
+
+- a reading is asked only when the work moved: ten seconds after a new request, then at most
+  every 45 seconds while a turn runs, and once more when it ends;
+- an idle session asks for none, and no session asks for more than 90 an hour;
+- a reading that fails is not retried until the work moves again;
+- `/binnacle digest off` asks no model at all, and the band shows each loop's own words.
+
+The clauses come in the plugin's `language`, or, left at its default, in the language you write
+your requests in. The model is told to describe the evidence and never to obey it, and its reply
+is reduced to plain single lines before anything is drawn.
+
+Each session writes its story to a state file under the plugin's `state/` folder. That folder
+stays on your machine; it is how one session's band rows the others.
+
+## More than the band
 
 - **Liveness, not just presence.** An agent listed as idle may be waiting on a message that will
-  come, on a shell whose end will never wake it, or on nothing at all. binnacle tells these apart
-  and says which one stalled.
-- **What, not which tool.** A small model reads what each loop was asked, said and did into
-  three short clauses: its goal, what it does now, what it has so far. Until it has, the request
-  and the loop's own last words stand in; the call that runs is the pulse beside them.
-- **Nothing to configure.** No settings file to edit, no script to run beside it: install it and
-  the band is there. With the band off it pins a one-line summary under the prompt instead.
+  come, on a shell whose end will never wake it, or on nothing at all. binnacle tells these apart,
+  marks the last as stalled in red, tells the agent once before it idles, and can wake the main
+  loop with a note (`/binnacle wake on`).
+- **Alerts.** Failing CI, actions denied this turn, other sessions writing in the same checkout,
+  a context about to compact, a quota about to fill: one line while any stands, a toast when it
+  appears, a chime when it is red.
+- **A status pane.** Press `p` (or run `/binnacle`): what the session is about, uncut; the turn's
+  calls with their results; each refusal with its reason; agents and shells; the pull request and
+  CI; usage with sparklines; compactions, edited files and loaded skills.
+- **A fallback line.** With the band off, binnacle pins a one-line summary under the prompt.
 
 ## Commands
 
@@ -82,12 +133,12 @@ the prompt. binnacle keeps the whole crew on screen while you type:
 |---|---|
 | `/binnacle` | Opens or closes the status pane |
 | `/binnacle band on\|off` | Draws above the prompt, or pins a one-line summary under it instead |
-| `/binnacle line full\|compact\|hidden` | How much that summary line shows |
 | `/binnacle digest on\|off` | Whether a small model reads each loop's work into a sentence |
+| `/binnacle line full\|compact\|hidden` | How much the summary line shows |
 | `/binnacle wake on\|off` | Whether a stalled agent wakes the main loop with a note |
 | `/binnacle reap` | Ends orphaned Codex loops (with `watchCodexLoops` on) |
 
-With a `language` set, the command also takes that dictionary's words (`/binnacle línea corta`,
+With a `language` set, the command also takes that dictionary's words (`/binnacle resumen no`,
 `/binnacle banda no` in Spanish); the English ones always work.
 
 ## Options
@@ -97,36 +148,24 @@ Set them in the plugin's settings (`/plugin`, then binnacle):
 | Option | Default | What it does |
 |---|---|---|
 | `language` | `en` | The language binnacle speaks: `en`, `es`, or any dictionary you add. Left alone, it follows Claude Code's own `language` setting when binnacle has that dictionary |
-| `peersCommand` | empty | A command that lists your other sessions, so each gets a row |
+| `peersCommand` | empty | A command that lists sessions of other harnesses, or names yours |
 | `watchCodexLoops` | off | Flags Codex app-server wrapper loops left behind by Zentty and offers to end them |
 | `hideModeHint` | off | Drops the permission-mode reminder from the hint under the prompt |
 | `pinStatusLine` | on | With the band off, pins a one-line summary under the prompt |
 
-### The reading
-
-The clauses come from the smallest Claude model (`haiku`), asked through the session's own
-client: what each loop was asked, the last words it wrote, its recent calls by their description,
-and the reading before. It is asked only when the work moved: ten seconds after a new request,
-then at most every 45 seconds while a turn runs, once more when it ends, never while the session
-is idle, and at most 90 times an hour. The clauses are written in the plugin's `language`, or,
-with the default, in the language you write your requests in. `/binnacle digest off` asks no
-model at all: the band then shows the request and each loop's own words.
-
-Each session's story is also written to its state file under `state/`, which stays on your
-machine: it is how one session's band rows the others.
-
 ### Language
 
 Every word binnacle draws comes from a JSON dictionary under `i18n/`. English is the default and
-Spanish ships with it: set `language` to `es`. To add a language, copy `i18n/en.json` to
-`i18n/<code>.json` and translate the values, keeping the `{placeholders}`. binnacle reads that
-file when a session starts, and a key it leaves out falls back to English. `bun tools/i18n.ts`
-builds the dictionaries in, and `--check` verifies that they are complete.
+Spanish ships with it. To add a language, copy `i18n/en.json` to `i18n/<code>.json` and translate
+the values, keeping the `{placeholders}`. binnacle reads that file when a session starts, and a
+key it leaves out falls back to English. `bun tools/i18n.ts` builds the dictionaries in, and
+`--check` verifies that they are complete.
 
 ### Other sessions
 
-Sessions that run binnacle row each other on their own. For sessions of other harnesses, or to
-name them, point `peersCommand` at any command that prints a JSON array of sessions:
+Sessions that run binnacle row each other on their own: each one's state file says where it is
+and what it is about. For sessions of other harnesses, or to give yours names, point
+`peersCommand` at any command that prints a JSON array of sessions:
 
 ```json
 [
@@ -148,15 +187,16 @@ name them, point `peersCommand` at any command that prints a JSON array of sessi
 Only `session` is required. A session is named by its `display_name`; without one, by the name
 an `intent` opens with (a capitalised word and a colon); without either, by its harness and the
 last four characters of its id. Sessions with `liveness: "live"` get a row; a `lifecycle` other
-than `active` is left out.
-The command runs without a shell, split on spaces, every ten seconds.
+than `active` is left out. A session the command lists that also runs binnacle gets one row: the
+command names it, its own state file tells its story. The command runs without a shell, split on
+spaces, every ten seconds.
 
-## A classic status line
+### A classic status line
 
-With the band off, binnacle pins one line under the prompt. For the full block instead (the
-work, the checkout and the budgets on lines of their own, in colour, a line of alerts, a row per
-background shell), point Claude Code's status line at `tools/statusline.ts` in `settings.json`
-and turn `pinStatusLine` off so the summary is not shown twice:
+With the band off, binnacle pins one line under the prompt. For a fuller block instead (the work,
+the checkout and the budgets on lines of their own, a line of alerts, a row per background
+shell), point Claude Code's status line at `tools/statusline.ts` in `settings.json` and turn
+`pinStatusLine` off so the summary is not shown twice:
 
 ```json
 "statusLine": {
@@ -167,12 +207,11 @@ and turn `pinStatusLine` off so the summary is not shown twice:
 }
 ```
 
-It prints nothing while the band draws, since the band shows the same facts; `BINNACLE_LINE=full`
-before `bun` prints it anyway.
+It prints nothing while the band draws; `BINNACLE_LINE=full` before `bun` prints it anyway.
 
 ## For scripts
 
-`bun tools/liveness.ts` prints the same verdicts for the latest session, one row per agent and
+`bun tools/liveness.ts` prints the band's verdicts for the latest session, one row per agent and
 shell (`--json` for one object per row), and exits with code 3 while an agent is stalled.
 
 ### How much quota is left
@@ -207,11 +246,19 @@ claude plugin test .                     # the test suite
 claude plugin validate .
 bun tools/i18n.ts --check                # dictionaries complete and built
 bun tools/preview.ts 120 band            # draw every fixture at 120 columns
-bun tools/shot.ts 150 > band.html        # the band as a web page, for a picture of it
 ```
 
-The banner is `assets/banner.svg`; rebuild the PNG with
-`rsvg-convert -w 2560 assets/banner.svg -o assets/banner.png`.
+The band is decided as data (`render/band.ts`) from what the session's events told
+(`model/`), so the hook, the tests and the tools draw the same lines.
+
+The pictures are made from the test fixtures, never from a real session:
+
+```bash
+bun tools/shot.ts 150 > band.html        # the band as a web page, for a still
+bun tools/demo.ts                        # the scripted session, played in the terminal
+vhs assets/demo.tape                     # records assets/demo.gif from it
+rsvg-convert -w 2560 assets/banner.svg -o assets/banner.png
+```
 
 ## License
 
