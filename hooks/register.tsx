@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, PluginOptions, Register } from 'claude-code'
 
-import { DEFAULT_LANGUAGE, dictionaryFrom, language, t, useLanguage } from '../i18n'
+import { DEFAULT_LANGUAGE, dictionaryFrom, language, t, tn, useLanguage } from '../i18n'
 import { DICTIONARIES } from '../i18n/dictionaries'
 
 import * as act from '../model/activity'
@@ -13,6 +13,7 @@ import { shellAdded, shellFrom, shellStopped, SHELLS_MAX } from '../model/shells
 import { ciFrom, gitFrom, loopsFrom, observed, offsetFrom, peersFrom, prFrom, remember } from '../model/signals'
 import { bandLines, budgetNotices, MAIN, noticesOf, PALETTE, THEME, type Action, type GaugePart, type Live, type SpinnerPart } from '../render/band'
 import { createBandView } from '../render/band-view'
+import { bashRow, resultView } from '../render/bash-row'
 import { gaugeCells } from '../render/gauge'
 import { prettyModel } from '../render/format'
 import { paneLines, type PaneInput } from '../render/pane'
@@ -49,7 +50,7 @@ const digest = atom({ plugin: 'binnacle', key: 'digest' } as const, true)
 const mates = atom({ plugin: 'binnacle', key: 'mates' } as const, [])
 
 /** The options the user set in the plugin's settings; `register` reads them on every load. */
-type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean }
+type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean; bashRows: boolean }
 
 /** A language name safe to read as a file under i18n/: "en", "es", "pt-BR". */
 const LANGUAGE_NAME = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/
@@ -66,6 +67,8 @@ export function settingsOf(options: PluginOptions | undefined): Settings {
     hideModeHint: options?.hideModeHint === true,
     // On unless turned off: the summary under the prompt is how binnacle shows with the band off.
     pinStatusLine: options?.pinStatusLine !== false,
+    // On unless turned off: Bash rows read by purpose, and the model is asked for those purposes.
+    bashRows: options?.bashRows !== false,
   }
 }
 
@@ -927,8 +930,64 @@ export const register: Register = (on, options) => {
       .split('·')
       .map(part => part.trim())
       .filter(part => part !== '' && !(settings.hideModeHint && /mode on|permissions on|shift\+tab|for agents/i.test(part)))
-      .filter(part => !(hasBandShells && /^\d+ active shells?$/i.test(part)))
+      .filter(part => !(hasBandShells && /^\d+ (?:active )?shells?$/i.test(part)))
+      // The band rows every agent by name; the footer's count of them only repeats it.
+      .filter(part => !(isBandDrawn && /^←\s*\d+\s+agents?$/i.test(part)))
       .join(' · ')
     return next({ ...e, props: { ...e.props, hint } })
+  })
+
+  // Bash rows and the band show each call's description to the user, whose language may not be
+  // the code's: ask for it in theirs.
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    if (!settings.bashRows) return composed
+    const text = `The \`description\` you give a Bash or Agent call is what the user reads to follow your work. Write it in plain ${t('prompt.languageInEnglish')} and say what the step is for, in a few words.`
+    return { sections: [...composed.sections, { id: 'binnacle:tool-descriptions', scope: 'session', text }] }
+  })
+
+  // A Bash row reads by what the call is for; the engine keeps the row and its status mark, and
+  // the folder and the highlighted command go under it.
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
+    if (!settings.bashRows || e.surface !== 'terminal' || e.props.tool !== 'Bash') return next(e)
+    const isExpanded = e.props.isExpanded === true
+    const row = bashRow(e.props.input, isExpanded)
+    if (row === null) return next(e)
+    // Expanded, the engine draws the result inside its row, above whatever comes after the row.
+    // Taking it over keeps the reading order: purpose, command, result.
+    // A failure stays the engine's: it draws the error from the row whatever the output says.
+    const result = isExpanded && !e.props.isErrored ? resultView(e.props.output) : null
+    const engineRow = await next({
+      ...e,
+      props: { ...e.props, input: { ...(e.props.input as object), command: row.title }, ...(result === null ? {} : { output: undefined }) },
+    })
+    const { Box, Text, Code } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        {engineRow}
+        <Box flexDirection="column" paddingLeft={2}>
+          {row.folder !== null && <Text dimColor>{row.folder}</Text>}
+          <Code key="bash-command" source={row.source} language="bash" />
+          {row.hidden > 0 && <Text dimColor>{`${tn('bash.moreLines', row.hidden)}${isExpanded ? '' : ` · ${t('bash.expandKey')}`}`}</Text>}
+          {result !== null && (
+            <Box flexDirection="row">
+              <Text dimColor>{'⎿  '}</Text>
+              <Box flexDirection="column" flexShrink={1}>
+                {result.out !== '' && (result.language === null ? <Text>{result.out}</Text> : <Code key="bash-output" source={result.out} language={result.language} />)}
+                {result.err !== '' && <Text dimColor>{result.err}</Text>}
+                {result.out === '' && result.err === '' && <Text dimColor>{t('bash.noOutput')}</Text>}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    )
+  })
+
+  // The same call's result block, when the row above has already drawn it.
+  on('ui.render', { component: 'ToolResult' }, ($, e, next) => {
+    if (!settings.bashRows || e.surface !== 'terminal' || e.props.tool !== 'Bash' || e.props.isExpanded !== true || e.props.isErrored || resultView(e.props.output) === null) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
   })
 }

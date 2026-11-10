@@ -2,11 +2,20 @@
   "name": "binnacle",
   "version": "0.4.0",
   "description": "A HUD above the Claude Code prompt that says what is being worked on: the session's goal, and what every agent, workflow, background shell and other session is on, in words; with context and quota gauges and a status pane",
-  "author": { "name": "Arakiss" },
+  "author": {
+    "name": "Arakiss"
+  },
   "homepage": "https://github.com/Arakiss/binnacle",
   "repository": "https://github.com/Arakiss/binnacle",
   "license": "MIT",
-  "keywords": ["hud", "status line", "agents", "subagents", "workflows", "monitoring"],
+  "keywords": [
+    "hud",
+    "status line",
+    "agents",
+    "subagents",
+    "workflows",
+    "monitoring"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
@@ -37,6 +46,12 @@
       "type": "boolean",
       "title": "Pin a summary line",
       "description": "With the band off, pin a one-line summary under the prompt; turn it off when settings.json runs tools/statusline.ts instead",
+      "default": true
+    },
+    "bashRows": {
+      "type": "boolean",
+      "title": "Read Bash calls by purpose",
+      "description": "Draw each Bash row by what it is for, its folder and the highlighted command, and ask the model for those purposes in your language",
       "default": true
     }
   }

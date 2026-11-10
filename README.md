@@ -127,6 +127,9 @@ stays on your machine; it is how one session's band rows the others.
   calls with their results; each refusal with its reason; agents and shells; the pull request and
   CI; usage with sparklines; compactions, edited files and loaded skills.
 - **A fallback line.** With the band off, binnacle pins a one-line summary under the prompt.
+- **Bash rows by purpose.** A Bash call reads by what it is for; the folder a leading `cd` moved
+  to and the command, highlighted, go under it, and an expanded row shows its result as JSON or a
+  diff when it is one.
 
 ## Commands
 
@@ -153,6 +156,7 @@ Set them in the plugin's settings (`/plugin`, then binnacle):
 | `watchCodexLoops` | off | Flags Codex app-server wrapper loops left behind by Zentty and offers to end them |
 | `hideModeHint` | off | Drops the permission-mode reminder from the hint under the prompt |
 | `pinStatusLine` | on | With the band off, pins a one-line summary under the prompt |
+| `bashRows` | on | Draws each Bash call by what it is for, with its folder and the command highlighted apart, and asks the model to write those purposes in your language |
 
 ### Language
 
