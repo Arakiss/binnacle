@@ -5,6 +5,10 @@
 // Measured: a background command a subagent or a teammate started does not wake it when it ends,
 // while a message does. A running shell is a wait, then, but not a waker: the moment it ends, an
 // idle owner has nothing left.
+//
+// Measured too, on a nine-agent run and again with a probe: a message reaches an in-process agent
+// only when its whole turn ends, never between tool calls. A queued message is a waker, then, and
+// stopping the agent before its turn ends throws the message away.
 
 import { t } from '../i18n'
 import { duration } from '../render/format'
@@ -15,7 +19,7 @@ import type { ShellRun } from './shells'
 export type Liveness = 'working' | 'waiting' | 'stalled' | 'done' | 'unknown'
 
 /** Something that may end an agent's idle; `wakes` false when its end will not. */
-export type Waker = { kind: 'engine' | 'reply' | 'monitor' | 'shell'; wakes: boolean; why: string }
+export type Waker = { kind: 'engine' | 'reply' | 'monitor' | 'shell' | 'inbox'; wakes: boolean; why: string }
 
 /** What binnacle says of one agent or shell: the state, since when, and why. */
 export type Verdict = { state: Liveness; since: number; why: string; wakers: Waker[] }
@@ -36,10 +40,23 @@ export function ownShells(agent: Agent, runs: readonly ShellRun[]): ShellRun[] {
   return agent.id === undefined ? [] : runs.filter(r => r.agentId === agent.id)
 }
 
+/** A message sent to it has not reached it yet: it arrives when its current turn ends. */
+export function hasQueued(agent: { queuedAt?: number; heardAt?: number }): boolean {
+  return agent.queuedAt !== undefined && agent.queuedAt > (agent.heardAt ?? -Infinity)
+}
+
+/** What the sender reads after a SendMessage to an agent in the middle of a turn. */
+export const queuedNote = (name: string): string => t('nudge.queued', { name })
+
+/** Why a TaskStop of an agent with a message still queued is refused, once. */
+export const stopRefusal = (name: string, queuedAt: number, now: number): string =>
+  t('nudge.stopQueued', { name, time: duration(now - queuedAt) })
+
 /** What could still end an agent's idle at `now`: the engine's hold, an answer owed, a monitor, a shell. */
 export function wakersOf(agent: Agent, runs: readonly ShellRun[], now: number): Waker[] {
   const out: Waker[] = []
   if (agent.status === 'waiting') out.push({ kind: 'engine', wakes: true, why: t('why.heldByEngine') })
+  if (hasQueued(agent)) out.push({ kind: 'inbox', wakes: true, why: t('why.queued') })
   if (agent.sentAt !== undefined && agent.sentAt > (agent.heardAt ?? -Infinity)) {
     out.push({ kind: 'reply', wakes: true, why: t('why.waitsOn', { who: agent.sentTo ?? '?' }) })
   }

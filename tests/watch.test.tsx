@@ -51,6 +51,8 @@ function engine(on: On, status: () => Status = () => 'idle') {
   })
   on('turn.complete', () => ({ text: '' }))
   on('tool.call', { tool: 'TaskStop' }, () => ({ result: {}, text: 'stopped' }) as never)
+  on('tool.call', { tool: 'SendMessage' }, () => ({ result: { success: true }, text: 'sent' }) as never)
+  on('session.receive', (_$, e) => ({ text: e.text }))
   on('ui.toast', () => ({ value: undefined }))
   on('audio.play', () => ({ value: undefined }))
   on('classic.TeammateIdle', () => ({}))
@@ -178,5 +180,46 @@ describe('the watch on the clock', () => {
     await $.turn.complete(turnEnd('a-sim'))
     await clock.advance(60_000)
     expect(submitted).toEqual([])
+  })
+})
+
+/** The lead's SendMessage as the main loop makes it: no agentId. */
+const lead = (to: string) => ({ tool: 'SendMessage', to, message: 'change of plan' }) as never
+/** The inbox delivery that reaches the teammate when its turn ends. */
+const delivered = (agentId: string) => ({ origin: { kind: 'coordinator' }, text: 'change of plan', agentId }) as never
+
+describe('a message sent to a teammate in the middle of its turn', () => {
+  test('the lead reads that it waits for the end of the turn; to an idle teammate, nothing is added', async ($, on) => {
+    let status: Status = 'running'
+    engine(on, () => status)
+    await $.session.start(SURFACE)
+    const busy = await $.tool.call(lead('simclasses'))
+    expect(busy.context).toEqual([expect.stringContaining('“simclasses” is in the middle of a turn')])
+    status = 'idle'
+    const idle = await $.tool.call(lead('simclasses'))
+    expect(idle.context).toBeUndefined()
+  })
+
+  test('a TaskStop before the message is delivered is refused once; the repeat goes through', async ($, on) => {
+    engine(on, () => 'running')
+    await $.session.start(SURFACE)
+    await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a-sim' } as never)
+    await $.tool.call(lead('simclasses'))
+    const first = await $.tool.call({ tool: 'TaskStop', task_id: 'simclasses' } as never)
+    expect(first.deny).toContain('has a message queued')
+    const second = await $.tool.call({ tool: 'TaskStop', task_id: 'simclasses' } as never)
+    expect(second.deny).toBeUndefined()
+  })
+
+  test('once the message reaches the teammate, TaskStop goes through and the idle hook speaks again', async ($, on) => {
+    const { clock } = engine(on, () => 'running')
+    await $.session.start(SURFACE)
+    await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a-sim' } as never)
+    await $.tool.call(lead('simclasses'))
+    await clock.advance(1_000)
+    expect((await $.classic.TeammateIdle({ teammate_name: 'simclasses', team_name: 'team', agent_id: 'a-sim' })).block).toBeUndefined()
+    await $.session.receive(delivered('a-sim'))
+    await clock.advance(1_000)
+    expect((await $.tool.call({ tool: 'TaskStop', task_id: 'a-sim' } as never)).deny).toBeUndefined()
   })
 })

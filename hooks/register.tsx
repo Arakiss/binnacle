@@ -19,6 +19,7 @@ import { paneLines, type PaneInput } from '../render/pane'
 import { statusLines, type Status } from '../render/status'
 import { plainText, type Tone } from '../render/text'
 import type { Activity, Mate, Meter, Mode, Shared, Shell, Snapshot } from '../types'
+import { hasQueued, queuedNote, stopRefusal } from '../model/liveness'
 import { runsOf, subagentStop, teammateIdle, watch } from './watch'
 
 const PANE = 'binnacle'
@@ -519,6 +520,17 @@ async function spokenLanguage($: Engine): Promise<string> {
 }
 
 /** A string field of a tool's arguments, whichever tool table the build laid. */
+/** The agent a SendMessage `to` names, by name, id or team address; undefined when none does. */
+async function addressed($: Engine, to: string): Promise<act.Listed | undefined> {
+  if (to === '') return undefined
+  try {
+    const listed = await $.agent.list()
+    return listed.find(info => info.name === to || info.id === to || info.teammateId === to || info.teammateId?.startsWith(`${to}@`) === true)
+  } catch {
+    return undefined
+  }
+}
+
 function argument(e: object, key: string): string {
   const value = (e as Record<string, unknown>)[key]
   return typeof value === 'string' ? value : ''
@@ -692,6 +704,22 @@ export const register: Register = (on, options) => {
 
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
+
+    // A stop that would throw away a message the agent has not received yet is refused once.
+    if (tool === 'TaskStop') {
+      const target = argument(e, 'task_id') || argument(e, 'shell_id')
+      const id = (await addressed($, target))?.id ?? target
+      await queue
+      const run = act.activeAgents(await read($, activity)).find(r => r.id === id || r.name === target)
+      if (run !== undefined && hasQueued(run) && run.stopWarnedAt !== run.queuedAt) {
+        const queuedAt = run.queuedAt as number
+        await update($, activity, a => act.stopWarned(a, run.id, queuedAt))
+        return { deny: stopRefusal(run.name, queuedAt, await $.clock.now()) }
+      }
+    }
+    // Read before sending: an idle agent turns running the moment the message wakes it.
+    const recipient = tool === 'SendMessage' ? await addressed($, argument(e, 'to')) : undefined
+    const isQueued = recipient !== undefined && recipient.status === 'running' && recipient.id !== e.agentId
     const said = act.described(e as Record<string, unknown>)
     const start = { id: e.tool_use_id, agentId: e.agentId, tool, target: act.summarize(tool, e as Record<string, unknown>, cwd), ...(said === undefined ? {} : { said }) }
     const startedAt = $.clock.now()
@@ -738,6 +766,11 @@ export const register: Register = (on, options) => {
     if (tool === 'Bash' || edited !== undefined) isGitStale = true
     if (tool === 'Bash' && /\b(git push|gh pr)\b/.test(argument(e, 'command'))) isCiStale = true
 
+    if (isQueued && !ran.isError && ran.deny === undefined) {
+      const to = recipient
+      record($, (a, at) => act.agentQueued(a, to.id, at), startedAt)
+      return { ...ran, context: [...(ran.context ?? []), queuedNote(to.name ?? argument(e, 'to'))] }
+    }
     return ran
   })
 

@@ -327,6 +327,21 @@ export function agentSent(a: Activity, id: string, to: string, at: number): Acti
   return { ...a, agents: touchAgent(a.agents, id, at, run => ({ ...run, sentAt: at, sentTo: cut(to, LIMITS.target) })) }
 }
 
+/** A message sent to an agent mid-turn: it waits until the turn ends. The oldest pending one is kept. */
+export function agentQueued(a: Activity, id: string, at: number): Activity {
+  return {
+    ...a,
+    agents: touchAgent(a.agents, id, at, run =>
+      run.queuedAt !== undefined && run.queuedAt > (run.heardAt ?? -Infinity) ? run : { ...run, queuedAt: at },
+    ),
+  }
+}
+
+/** A TaskStop of this agent was refused once for the message queued at `queuedAt`. */
+export function stopWarned(a: Activity, id: string, queuedAt: number): Activity {
+  return { ...a, agents: a.agents.map(run => (run.id === id ? { ...run, stopWarnedAt: queuedAt } : run)) }
+}
+
 /** A message delivered to an agent. */
 export function agentHeard(a: Activity, id: string, at: number): Activity {
   return { ...a, agents: touchAgent(a.agents, id, at, run => ({ ...run, heardAt: at })) }

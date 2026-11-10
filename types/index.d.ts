@@ -87,6 +87,11 @@ export type AgentFacts = {
   sentTo?: string
   /** The last message delivered to it. */
   heardAt?: number
+  /**
+   * When the oldest message it has not received yet was sent: one sent while its turn ran waits
+   * until that turn ends. Pending while later than `heardAt`.
+   */
+  queuedAt?: number
   monitors?: Watch[]
 }
 
@@ -151,6 +156,8 @@ export type AgentRun = AgentFacts & {
   endedAt?: number
   /** When the idle hook last told it it had nothing to wake it. */
   nudgedAt?: number
+  /** The `queuedAt` a TaskStop of it was already refused for: the next one goes through. */
+  stopWarnedAt?: number
   /** The `since` of the stall the lead was last told of. */
   toldAt?: number
   /** The run id of the workflow that started it; `$.agent.list()` never lists such an agent. */

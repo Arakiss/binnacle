@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import * as act from '../model/activity'
-import { idleNudge, shellVerdict, stopNudge, verdictOf, type Agent } from '../model/liveness'
+import { hasQueued, idleNudge, shellVerdict, stopNudge, stopRefusal, verdictOf, wakersOf, type Agent } from '../model/liveness'
 import type { ShellRun } from '../model/shells'
 import { bandLines } from '../render/band'
 import { statusLines } from '../render/status'
@@ -79,6 +79,37 @@ describe('what the HUD cannot see it says it cannot', () => {
   test('a call in flight or a turn under way is work, whatever the list last said', () => {
     expect(verdictOf({ ...idle, busy: 1 }, [], NOW).state).toBe('working')
     expect(verdictOf({ ...idle, phase: 'turn' }, [], NOW).state).toBe('working')
+  })
+})
+
+describe('a message sent while the agent is mid-turn', () => {
+  test('is queued until its turn ends: a waker, so the idle hook leaves it alone', () => {
+    const queued = { ...idle, queuedAt: NOW - MIN, heardAt: NOW - 3 * MIN }
+    expect(hasQueued(queued)).toBe(true)
+    expect(wakersOf(queued, [], NOW).map(w => w.kind)).toEqual(['inbox'])
+    expect(idleNudge(queued, [], NOW)).toBeNull()
+    expect(verdictOf(queued, [], NOW).state).toBe('waiting')
+  })
+
+  test('stops being queued once a delivery reaches the agent', () => {
+    expect(hasQueued({ queuedAt: NOW - 3 * MIN, heardAt: NOW - MIN })).toBe(false)
+    expect(hasQueued({})).toBe(false)
+  })
+
+  test('the reducer keeps the oldest pending message, and a new one after a delivery starts over', () => {
+    let a = act.agentSpawned(act.EMPTY, { id: 'a-sim', name: 'simclasses', type: 'general-purpose', isBackground: true, isTeammate: true, at: NOW - 10 * MIN })
+    a = act.agentQueued(a, 'a-sim', NOW - 5 * MIN)
+    a = act.agentQueued(a, 'a-sim', NOW - 4 * MIN)
+    expect(a.agents[0]?.queuedAt).toBe(NOW - 5 * MIN)
+    a = act.agentHeard(a, 'a-sim', NOW - 3 * MIN)
+    a = act.agentQueued(a, 'a-sim', NOW - 2 * MIN)
+    expect(a.agents[0]?.queuedAt).toBe(NOW - 2 * MIN)
+  })
+
+  test('a stop refusal says how long the message has waited and how to discard it', () => {
+    const text = stopRefusal('rooms-bus', NOW - 12 * MIN, NOW)
+    expect(text).toContain('“rooms-bus” has a message queued for 12 min')
+    expect(text).toContain('run the TaskStop again')
   })
 })
 
