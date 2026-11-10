@@ -5,6 +5,31 @@ Every change a user of binnacle can notice. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); before 1.0.0 a minor version may
 change what the band shows.
 
+## [0.5.0] - 2026-11-10
+
+Bash calls read by what they are for, and a message to a busy agent no longer gets lost.
+
+### Added
+
+- Bash rows by purpose (`bashRows`, on by default): the row reads by the call's description, the
+  folder a leading `cd` moved to and the highlighted command go under it, and an expanded row
+  shows its result, as JSON or a diff when it is one. The system prompt asks for those
+  descriptions in the language binnacle speaks.
+- A running background shell's row ends with the last line its output wrote.
+- A SendMessage to an agent in the middle of a turn gets a note: the message reaches it only when
+  that turn ends, so it should not be resent, nor the agent stopped before its idle notice.
+- A sessions listing may mark a live session `idle: true`; such a session waits, and gets no row.
+
+### Changed
+
+- A TaskStop of an agent that has a message it has not received yet is refused once, with why;
+  running it again goes through.
+- The idle hook no longer tells an agent with a message queued that nothing will wake it.
+- Sessions the listing calls idle no longer count as company in this checkout.
+- The footer drops its count of agents while the band rows each of them.
+- In Spanish the main loop reads «esta sesión», a running shell «segundo plano» and a failed one
+  «falló (N)».
+
 ## [0.4.0] - 2026-11-09
 
 The band now says what is being worked on, not which tool ran last.
@@ -63,6 +88,7 @@ The band now says what is being worked on, not which tool ran last.
 - binnacle: a band above the Claude Code prompt with a row per agent, workflow, background shell
   and other session, context and quota gauges, liveness verdicts, alerts and a status pane.
 
+[0.5.0]: https://github.com/Arakiss/binnacle/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Arakiss/binnacle/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Arakiss/binnacle/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Arakiss/binnacle/compare/v0.1.0...v0.2.0

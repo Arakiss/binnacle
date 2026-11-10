@@ -1,6 +1,6 @@
 {
   "name": "binnacle",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A HUD above the Claude Code prompt that says what is being worked on: the session's goal, and what every agent, workflow, background shell and other session is on, in words; with context and quota gauges and a status pane",
   "author": {
     "name": "Arakiss"
