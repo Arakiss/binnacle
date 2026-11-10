@@ -183,6 +183,7 @@ and what it is about. For sessions of other harnesses, or to give yours names, p
     "branch": "main",
     "intent": "Vesper: syncing the docs site",
     "liveness": "live",
+    "idle": false,
     "lifecycle": "active",
     "last_ms": 1793000000000
   }
@@ -191,8 +192,9 @@ and what it is about. For sessions of other harnesses, or to give yours names, p
 
 Only `session` is required. A session is named by its `display_name`; without one, by the name
 an `intent` opens with (a capitalised word and a colon); without either, by its harness and the
-last four characters of its id. Sessions with `liveness: "live"` get a row; a `lifecycle` other
-than `active` is left out. A session the command lists that also runs binnacle gets one row: the
+last four characters of its id. Sessions with `liveness: "live"` get a row unless `idle` is
+true, which marks a live session that waits rather than works; a `lifecycle` other than `active`
+is left out. A session the command lists that also runs binnacle gets one row: the
 command names it, its own state file tells its story. The command runs without a shell, split on
 spaces, every ten seconds.
 

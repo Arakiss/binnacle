@@ -5,7 +5,7 @@ import { t, useLanguage } from '../i18n'
 import { at, bandLines, briefOf, budgetNotices, compact, contextColour, DETAIL_ROWS, elapsedOf, isAheadOfPace, lineCells, noticesOf, PALETTE, peerWords, quotaColour, rowsOf, size, THEME, type BandLine, type Item } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { CAP, easedToward, gaugeRuns } from '../render/gauge'
-import { peersFrom } from '../model/signals'
+import { crowdOf, isWorking, peersFrom } from '../model/signals'
 import { drawn, STAND_INS, STILL_PARTS } from '../tools/draw'
 import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, bandOf, FILLING, IDLE, MAIN_STORY, MATES, NO_REPO, NOW, RESTED, RUNS, SHARED_CHECKOUT, STATUS, TOLD, TZ, WORKING } from './fixtures'
 
@@ -194,6 +194,15 @@ describe('band lines', () => {
     ])
     // A blank name is no name.
     expect(peersFrom(JSON.stringify([row(a, { display_name: '  ' })]), 'me').map(p => peerWords(p).name)).toEqual(['codex 1b2c'])
+  })
+
+  test('a session the command calls idle waits: listed after the working ones, and never a row or company', () => {
+    const row = (session: string, extra: Record<string, unknown> = {}) => ({ session, root: session, harness: 'codex', lifecycle: 'active', liveness: 'live', repo: '/w/shop', cwd: '/w/shop', last_ms: NOW - MIN, ...extra })
+    const peers = peersFrom(JSON.stringify([row('quiet', { idle: true, last_ms: NOW }), row('busy'), row('gone', { liveness: 'stale' })]), 'me')
+    expect(peers.map(p => p.session)).toEqual(['busy', 'quiet', 'gone'])
+    expect(peers.map(isWorking)).toEqual([true, false, false])
+    expect(crowdOf(peers, '/w/shop')).toBe(1)
+    expect(rowsOf({ ...bandOf(STATUS, IDLE, []), peers }, IDLE).filter(r => r.kind === 'peer').map(r => r.key)).toEqual(['peer-busy'])
   })
 
   test("other sessions sit under their own title when they share the band with this session's rows", () => {

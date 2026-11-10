@@ -53,7 +53,7 @@ export function prFrom(viewJson: string): Pr | null {
 /**
  * One session as the `peersCommand` option's command prints it: a JSON array of these. Only
  * `session` is required; a row whose `lifecycle` is present and not `active` is left out, and
- * `liveness: "live"` marks the ones at work. A `display_name` is the session's name; without one,
+ * `liveness: "live"` marks the ones up, and `idle: true` the live ones that wait. A `display_name` is the session's name; without one,
  * an `intent` that opens with a capitalised name and a colon ("Vesper: fixing the importer") reads
  * as that session's name and mission.
  */
@@ -68,6 +68,7 @@ type Row = {
   intent?: string | null
   liveness?: string
   lifecycle?: string
+  idle?: boolean | null
   last_ms?: number
 }
 
@@ -77,7 +78,8 @@ export function peersFrom(lsJson: string, self: string, max = 12): Peer[] {
   if (!Array.isArray(rows)) return []
   return rows
     .filter(r => (r.lifecycle === undefined || r.lifecycle === 'active') && r.session !== self && r.root !== self && typeof r.session === 'string')
-    .sort((a, b) => (a.liveness === 'live' ? 0 : 1) - (b.liveness === 'live' ? 0 : 1) || (b.last_ms ?? 0) - (a.last_ms ?? 0))
+    // Working first, then waiting, then the ones with no signal; newest first within each.
+    .sort((a, b) => rank(a) - rank(b) || (b.last_ms ?? 0) - (a.last_ms ?? 0))
     .slice(0, max)
     .map(r => ({
       session: r.session ?? '',
@@ -88,6 +90,7 @@ export function peersFrom(lsJson: string, self: string, max = 12): Peer[] {
       branch: r.branch ?? null,
       intent: r.intent ?? null,
       liveness: r.liveness ?? '',
+      ...(r.idle === true ? { idle: true } : {}),
       lastMs: r.last_ms ?? 0,
     }))
 }
@@ -106,10 +109,23 @@ export function peerWords(peer: Peer): { name: string; mission: string } {
   return { name, mission }
 }
 
-/** Live sessions writing in this very checkout. */
+function rank(r: Row): number {
+  if (r.liveness !== 'live') return 2
+  return r.idle === true ? 1 : 0
+}
+
+/**
+ * A session at work: live, and not one the command calls idle. A session quiet for hours is not
+ * company in the checkout, and a time threshold of binnacle's own would disagree with the list.
+ */
+export function isWorking(peer: Peer): boolean {
+  return peer.liveness === 'live' && peer.idle !== true
+}
+
+/** Sessions at work in this very checkout; the waiting ones are not company. */
 export function crowdOf(peers: readonly Peer[], root: string | undefined): number {
   if (root === undefined) return 0
-  return peers.filter(p => p.liveness === 'live' && p.repo === root).length
+  return peers.filter(p => isWorking(p) && p.repo === root).length
 }
 
 // Zentty's Codex wrapper can re-exec itself forever once whatever launched `codex app-server` dies

@@ -36,6 +36,8 @@ export type Peer = {
   branch: string | null
   intent: string | null
   liveness: string
+  /** The command calls it idle: live but waiting, not at work. */
+  idle?: boolean
   lastMs: number
 }
 

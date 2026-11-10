@@ -18,7 +18,7 @@ import { isSame, matesShown } from '../model/fleet'
 import type { Liveness } from '../model/liveness'
 import { STALL_MS } from '../model/activity'
 import { RECENT_MS, type ShellRun } from '../model/shells'
-import { peerWords, untilFull } from '../model/signals'
+import { isWorking, peerWords, untilFull } from '../model/signals'
 
 export { peerWords }
 import type { Brief, Ci, Finished, Git, Mate, Meter, Peer, Pr, Sample, Shared, Snapshot, Story, Trail } from '../types'
@@ -815,7 +815,7 @@ export function rowsOf(input: BandInput, shared: Shared): Row[] {
   // A session that runs binnacle tells its own story; the sessions command only names it then.
   const livePeers = (input.peers ?? []).filter(p => p.liveness === 'live')
   const mates = matesShown(input.mates ?? [], now)
-  const peers = [...mates.map(m => mateRow(m, livePeers.find(p => isSame(p, m)), now)), ...livePeers.filter(p => !mates.some(m => isSame(p, m))).map(p => peerRow(p, now))]
+  const peers = [...mates.map(m => mateRow(m, livePeers.find(p => isSame(p, m)), now)), ...livePeers.filter(p => isWorking(p) && !mates.some(m => isSame(p, m))).map(p => peerRow(p, now))]
   const finished = (shared.finished ?? []).map(f => finishedRow(f, now))
   const rows = [...agents.filter(j => !grouped.has(j)).map(j => agentRow(j, now, j.agent.id === undefined ? undefined : input.live?.[j.agent.id])), ...workflows, ...shells, ...peers, ...finished]
   // A stable sort: within a rank, agents in the order they started, then workflows, shells newest first, sessions.
