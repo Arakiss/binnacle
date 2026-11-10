@@ -273,7 +273,7 @@ describe('band lines', () => {
     try {
       useLanguage('es')
       const spanish = wordsOf()
-      for (const word of ['sesión 4d17h', 'trabajando 3m', '14 acciones', 'CI falla (2 de 9)', 'parado', 'principal', 'se reinicia']) expect(spanish).toContain(word)
+      for (const word of ['sesión 4d17h', 'trabajando 3m', '14 acciones', 'CI falla (2 de 9)', 'parado', 'esta sesión', 'se reinicia']) expect(spanish).toContain(word)
       for (const word of ['session', 'working', 'actions', 'failing', 'stalled', 'resets']) expect(spanish).not.toContain(word)
       // A dictionary read from disk overrides the built-in words it names, and only those.
       useLanguage('es', { 'band.working': 'currando {time}' })

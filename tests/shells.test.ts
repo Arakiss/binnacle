@@ -66,7 +66,7 @@ describe('the state of a shell, from the tail of its output', () => {
     const s = shell('a', NOW - 5 * MIN)
     expect(runOf(s, null)).toEqual(ended('a', NOW - 5 * MIN, null, null))
     // A running shell carries when its output last changed, so a silent one can be told.
-    expect(runOf(s, { tail: 'tick\n', mtimeMs: NOW })).toEqual({ ...running('a', NOW - 5 * MIN), quietSince: NOW })
+    expect(runOf(s, { tail: 'tick\n', mtimeMs: NOW })).toEqual({ ...running('a', NOW - 5 * MIN), quietSince: NOW, progress: 'tick' })
     expect(runOf(s, { tail: '[exited with code 2]\n', mtimeMs: NOW - MIN })).toEqual(ended('a', NOW - 5 * MIN, 2, NOW - MIN))
     expect(runOf({ ...s, stoppedAt: NOW - 10_000 }, { tail: 'tick', mtimeMs: NOW })).toEqual(ended('a', NOW - 5 * MIN, null, NOW - 10_000))
   })
@@ -153,4 +153,10 @@ describe('shell rows', () => {
   test('a hidden status line hides the shells too', () => {
     expect(statusLines(STATUS, { ...IDLE, mode: 'hidden' }, NOW, 120, TZ, [running('a', NOW)])).toEqual([])
   })
+})
+
+test('a running shell says how far it has got, without its colour codes', () => {
+  const shell = { id: 'b1', label: 'Measure', startedAt: 1, output: '/t/b1.output' }
+  expect(runOf(shell, { tail: '== df\n\x1b[32m== home top\x1b[0m\n\n', mtimeMs: 2 })).toEqual(expect.objectContaining({ state: 'running', progress: '== home top' }))
+  expect(runOf(shell, { tail: '', mtimeMs: 2 })).not.toHaveProperty('progress')
 })

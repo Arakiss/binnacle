@@ -1,6 +1,7 @@
 // Background shells: what a Bash call with run_in_background started, and how the status line
 // tells, from the tail of its output file alone, whether it still runs. Pure: the caller reads.
 
+import { printable } from './printable'
 import { firstLine } from '../render/format'
 import { cut, width } from '../render/text'
 import type { Shell } from '../types'
@@ -78,9 +79,15 @@ export type Probe = { tail: string; mtimeMs: number } | null
 /** A shell as the status line draws it: still running, or ended (`code` null when unknown); `agentId` its owner. */
 export type ShellRun = { label: string; startedAt: number; agentId?: string } & (
   /** `quietSince`: when its output file last changed, to tell a shell that stopped writing. */
-  | { state: 'running'; quietSince?: number }
+  | { state: 'running'; quietSince?: number; progress?: string }
   | { state: 'ended'; code: number | null; endedAt: number | null }
 )
+
+/** The last line a shell wrote, for the band to say how far it has got; nothing while it has written none. */
+export function progressOf(tail: string): { progress?: string } {
+  const last = printable(tail).split('\n').map(line => line.trim()).filter(Boolean).at(-1)
+  return last === undefined ? {} : { progress: last }
+}
 
 /** What one probe says of one shell; a missing file is a shell gone, with no code and no end. */
 export function runOf(shell: Shell, probe: Probe): ShellRun {
@@ -88,5 +95,5 @@ export function runOf(shell: Shell, probe: Probe): ShellRun {
   if (shell.stoppedAt !== undefined) return { ...base, state: 'ended', code: null, endedAt: shell.stoppedAt }
   if (probe === null) return { ...base, state: 'ended', code: null, endedAt: null }
   const code = exitOf(probe.tail)
-  return code === null ? { ...base, state: 'running', quietSince: probe.mtimeMs } : { ...base, state: 'ended', code, endedAt: probe.mtimeMs }
+  return code === null ? { ...base, state: 'running', quietSince: probe.mtimeMs, ...progressOf(probe.tail) } : { ...base, state: 'ended', code, endedAt: probe.mtimeMs }
 }

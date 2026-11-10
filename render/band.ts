@@ -750,13 +750,14 @@ function shellRow(run: ShellRun, i: number, owner: string, now: number, count = 
     const isQuiet = quiet >= SHELL_QUIET_MS
     const twice = count > 1 ? [text(` · ${t('row.launchedTimes', { n: count })}`, PALETTE.amber)] : []
     const silent = isQuiet ? [text(` · ${t('row.noOutput', { time: compact(quiet) })}`, PALETTE.amber)] : []
+    const progress = run.progress === undefined ? [] : [dim(` · ${t('row.progress', { line: run.progress })}`)]
     return {
       ...base,
       rank: 4,
       sign: { kind: 'spinner', id: `shell-${i}`, colour: PALETTE.amber },
-      state: `shell ${compact(now - run.startedAt)}${count > 1 ? ` ×${count}` : ''}`,
+      state: `${t('shell.running')} ${compact(now - run.startedAt)}${count > 1 ? ` ×${count}` : ''}`,
       stateColour: PALETTE.amber,
-      what: [text(run.label), ...twice, ...silent],
+      what: [text(run.label), ...twice, ...silent, ...progress],
       card: [dim(`${owner} · ${run.label}${count > 1 ? ` · ${t('row.duplicates.card', { n: count })}` : ''}${isQuiet ? ` · ${t('row.noOutput.card', { time: compact(quiet) })}` : ''}`)],
     }
   }
