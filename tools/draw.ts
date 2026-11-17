@@ -66,7 +66,9 @@ function colourCode(value: unknown): string | undefined {
 
 type Run = { t: string; sgr: string }
 
+// A node the engine draws itself (its own row under a hook that called next) may come without props.
 const isNode = (value: unknown): value is Node => typeof value === 'object' && value !== null && 'type' in value
+const withProps = (node: Node): Node => (node.props === undefined ? { ...node, props: {} } : node)
 
 const widthOf = (runs: readonly Run[]) => runs.reduce((n, r) => n + [...r.t].length, 0)
 
@@ -74,7 +76,8 @@ type Style = { fg?: string; bg?: string; bold?: boolean; italic?: boolean }
 
 const sgrOf = (style: Style) => [style.bold ? '1' : '', style.italic ? '3' : '', style.fg ? `38;${style.fg}` : '', style.bg ? `48;${style.bg}` : ''].filter(Boolean).join(';') || '0'
 
-function textRuns(node: Node, inherited: Style): Run[] {
+function textRuns(given: Node, inherited: Style): Run[] {
+  const node = withProps(given)
   const style: Style = {
     fg: colourCode(node.props.color) ?? inherited.fg,
     bg: colourCode(node.props.backgroundColor) ?? inherited.bg,
@@ -98,7 +101,8 @@ function clientRuns(node: Node): Run[] {
 const isInFlow = (node: Node) => !(node.type === 'Box' && (node.props.display === 'none' || node.props.position === 'absolute'))
 
 /** One row of runs for a node, `width` cells wide when it spreads its children. */
-function rowRuns(node: Node, width: number | null): Run[] {
+function rowRuns(given: Node, width: number | null): Run[] {
+  const node = withProps(given)
   if (node.type === 'Text') return textRuns(node, { fg: '5;255' })
   if (node.type === 'Link') return node.children.filter(isNode).flatMap(child => textRuns(child, { fg: '5;255' }))
   if (node.type === 'Button') return [{ t: String(node.props.hotkey), sgr: sgrOf({ fg: '5;117' }) }, { t: `: ${String(node.props.label)}`, sgr: sgrOf({ fg: '5;247' }) }]
@@ -116,9 +120,14 @@ function rowRuns(node: Node, width: number | null): Run[] {
 }
 
 /** The tree's rows as text: ANSI-coloured, or plain. Padding and gaps between rows are not drawn. */
-export function drawn(tree: unknown, isPlain = false): string[] {
-  if (!isNode(tree)) return []
-  const width = typeof tree.props.width === 'number' ? tree.props.width : null
-  const rows = tree.props.flexDirection === 'column' ? tree.children.filter(isNode) : [tree]
-  return rows.map(row => rowRuns(row, width).map(r => (isPlain ? r.t : `\x1b[${r.sgr}m${r.t}\x1b[0m`)).join(''))
+export function drawn(given: unknown, isPlain = false): string[] {
+  if (!isNode(given)) return []
+  return rowsOf(withProps(given), null).map(({ row, width }) => rowRuns(row, width).map(r => (isPlain ? r.t : `\x1b[${r.sgr}m${r.t}\x1b[0m`)).join(''))
+}
+
+/** A tree's rows, each with the width of the column it sits in: the engine may lay the band's column inside one of its own. */
+function rowsOf(node: Node, width: number | null): { row: Node; width: number | null }[] {
+  const own = typeof node.props.width === 'number' ? node.props.width : width
+  if (node.type !== 'Box' || node.props.flexDirection !== 'column') return [{ row: node, width: own }]
+  return node.children.filter(isNode).map(withProps).flatMap(child => rowsOf(child, own))
 }

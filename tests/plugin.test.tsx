@@ -494,12 +494,24 @@ const band = (props: { bodyColumns?: number; maxRows?: number; hasSurvey?: boole
     },
   }) as const
 
-type Drawn = { type: string; props: Record<string, unknown>; children: unknown[] }
+type Drawn = { type: string; props?: Record<string, unknown>; children: unknown[]; part?: { plugin?: string } }
+
+/** Whether a node is the engine's own row, which the test harness tags as drawn by `test`. */
+const isEngines = (node: unknown) => typeof node === 'object' && node !== null && (node as Drawn).part?.plugin === 'test'
+
+/** The band's own Box: the engine may lay it in a column of its own, beside its own row. */
+async function bandBox(drawn: { drawn: () => Promise<unknown> }): Promise<Drawn> {
+  const tree = (await drawn.drawn()) as Drawn
+  const inner = tree.props?.width === undefined ? tree.children.find((child): child is Drawn => typeof child === 'object' && child !== null && !isEngines(child) && (child as Drawn).type === 'Box') : undefined
+  return inner ?? tree
+}
 
 /** The band's rows as a terminal lays them out, without colour; none when the engine drew its own. */
 async function rows(drawn: { drawn: () => Promise<unknown> }) {
   const tree = (await drawn.drawn()) as Drawn
-  return tree.type === 'Box' ? layOut(tree, true) : []
+  if (tree.type !== 'Box' || isEngines(tree)) return []
+  // The engine lays the band in a column of its own, beside its own row: the band is what is left.
+  return layOut({ ...tree, children: tree.children.filter(child => !isEngines(child)) }, true)
 }
 
 describe('the band above the prompt', () => {
@@ -560,12 +572,12 @@ describe('the band above the prompt', () => {
 
     const tight = await $.ui.mount(band({ maxRows: 1 }))
     expect(await rows(tight)).toHaveLength(1)
-    expect(((await tight.drawn()) as Drawn).props.paddingTop).toBe(0)
+    expect((await bandBox(tight)).props?.paddingTop).toBe(0)
     await tight.unmount()
 
     // With room to spare, an empty row above the band and one below it.
     const roomy = await $.ui.mount(band())
-    expect(((await roomy.drawn()) as Drawn).props).toEqual(expect.objectContaining({ paddingTop: 1, paddingBottom: 1 }))
+    expect((await bandBox(roomy)).props).toEqual(expect.objectContaining({ paddingTop: 1, paddingBottom: 1 }))
     await roomy.unmount()
   })
 
