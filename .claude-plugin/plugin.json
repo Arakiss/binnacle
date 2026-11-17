@@ -30,6 +30,12 @@
       "description": "A command printing the other live sessions as a JSON array (see the README); empty turns the rows off",
       "default": ""
     },
+    "peerRows": {
+      "type": "string",
+      "title": "Which other sessions get a row",
+      "description": "here: only the sessions in this repo (the rest are a count in the foot, o rows them); all: every one; off: none",
+      "default": "here"
+    },
     "watchCodexLoops": {
       "type": "boolean",
       "title": "Watch for orphaned Codex loops",

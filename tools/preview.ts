@@ -5,6 +5,7 @@
 //   bun tools/preview.ts 100 pane --plain the pane, without ANSI
 //   bun tools/preview.ts 160 band         the band above the prompt, every fixture
 //   bun tools/preview.ts 160 band 2       the same, given only two rows
+//   bun tools/preview.ts 160 team         a lead between turns, its team at work, sessions here and elsewhere
 //   bun tools/preview.ts 160 liveness     a team in every liveness: status line, band, pane rows, report
 //   bun tools/preview.ts 160 liveness 20  the same, the band given twenty rows
 // The band goes through its components (render/band-view.tsx) over stand-in elements; the engine
@@ -16,7 +17,7 @@ import { statusLines, type Status } from '../render/status'
 import { paint, plainText, type Line } from '../render/text'
 import type { Shared } from '../types'
 import { lineOf, rowsOf } from '../render/report'
-import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, API_KEY, bandOf, busyPane, IDLE, LIVE_RUNS, livenessPane, livenessShared, MATES, NO_REPO, NOW, RESTED, RUNS, SHARED_CHECKOUT, STATUS, TOLD, TZ, WORKING } from '../tests/fixtures'
+import { AHEAD_OF_PACE, ALERT_STATUS, ALERTS, API_KEY, bandOf, busyPane, IDLE, LIVE_RUNS, livenessPane, livenessShared, MATES, NO_REPO, NOW, RESTED, RUNS, SHARED_CHECKOUT, STATUS, teamBand, TOLD, TZ, WORKING } from '../tests/fixtures'
 import { drawn, installFactory, STAND_INS, STILL_PARTS } from './draw'
 
 const columns = Number(process.argv[2] ?? 120)
@@ -49,6 +50,15 @@ if (which === 'liveness') {
   console.log(paneLines(livenessPane(), columns).map(show).join('\n'))
   console.log('── tools/liveness.ts')
   console.log(rowsOf(shared, LIVE_RUNS, NOW).map(row => lineOf(row, NOW)).join('\n'))
+} else if (which === 'team') {
+  installFactory()
+  const { Band } = createBandView(STAND_INS, STILL_PARTS)
+  const maxRows = Number(words[1] ?? 14)
+  const input = teamBand()
+  for (const peersOpen of [false, true]) {
+    console.log(`── band · team${peersOpen ? ' · every session (o)' : ''} @ ${columns}×${maxRows}`)
+    console.log(drawn(Band({ lines: bandLines({ ...input, peersOpen }, columns, maxRows), columns }), isPlain).join('\n'))
+  }
 } else if (which === 'pane') {
   console.log(paneLines(busyPane(), columns).map(show).join('\n'))
 } else if (which === 'band') {

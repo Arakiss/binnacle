@@ -238,7 +238,7 @@ describe('pane', () => {
     const all = body(paneLines(busyPane(), 120).map(plainText)).join('\n')
     expect(all).toMatch(/● explore types .*2 actions silent 12 min/)
     expect(all).toMatch(/● Vesper +acme +Syncing/)
-    expect(all).toMatch(/main\s+Bash\s+bun test src\s+ok/)
+    expect(all).toMatch(/you\s+Bash\s+bun test src\s+ok/)
   })
 
   test('the busy pane says what runs, who did what and why it was refused', () => {

@@ -130,6 +130,8 @@ export type Finished = { id: string; name: string; endedAt: number; outcome: str
  */
 export type Mate = {
   session: string
+  /** The checkout it works in, to tell a session in this repo from one elsewhere. */
+  root?: string
   repo?: string
   branch?: string
   seenAt: number
@@ -281,6 +283,8 @@ declare module 'claude-code' {
       digest: boolean
       /** The other sessions that run binnacle, as their state files told at the last look. */
       mates: Mate[]
+      /** Whether the person asked to see every other session, not only the ones in this repo. */
+      peersOpen: boolean
     }
   }
 }

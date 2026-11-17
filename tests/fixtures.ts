@@ -297,3 +297,68 @@ export const MATES: Mate[] = [
   { session: 'b1c2d3e4-0000', repo: 'acme', branch: 'main', seenAt: NOW - 10_000, turnStartedAt: NOW - 7 * MIN, agents: 2, goal: 'Sync the docs site with the new options', now: 'Rewriting the options table' },
   { session: 'f0e1d2c3-9999', repo: 'shop', branch: 'feat/cart', seenAt: NOW - 20_000, endedAt: NOW - 4 * MIN, agents: 0, goal: 'Make the cart total survive a reload', outcome: 'Stored in the session; one test still fails' },
 ]
+
+// ── A lead between turns, its team still at work ─────────────────────────────────────────────────
+
+/**
+ * The lead's turn ended eleven minutes ago; one teammate waits thirteen minutes on its answer,
+ * another works with a dev server running and a check that just passed; the lead's own dev server
+ * has run since the morning. Three sessions work in another repo, one in this one.
+ */
+export function teamBand(): BandInput {
+  const shared: Shared = {
+    git: GIT,
+    turn: null,
+    last: { endedAt: NOW - 11 * MIN, seconds: 900, actions: 40, steps: 20 },
+    story: {
+      asks: ['Plan the move of the billing service to the new queue, with a rollback.'],
+      askedAt: NOW - 40 * MIN,
+      outcome: 'The queue is not the risk; the nightly export is.',
+      outcomeAt: NOW - 11 * MIN,
+      trail: { read: 12, search: 3, edit: 0, run: 2, web: 4, agent: 2, other: 0, files: [] },
+      brief: { goal: 'Plan the billing move to the new queue', now: 'The queue is not the risk; the nightly export is', done: 'Three rollouts simulated; rollback rehearsed on staging', at: NOW - 10 * MIN },
+    },
+    agents: [
+      {
+        id: 'a-adv',
+        name: 'advisor',
+        isTeammate: true,
+        phase: 'idle',
+        phaseAt: NOW - 13 * MIN,
+        status: 'idle',
+        sentAt: NOW - 13 * MIN,
+        sentTo: 'team-lead',
+        heardAt: NOW - 20 * MIN,
+        lastAt: NOW - 13 * MIN,
+        busy: 0,
+        story: { asks: ['Judge the billing plan on its own.'], askedAt: NOW - 30 * MIN, brief: { goal: 'Judge the billing plan independently', now: 'Waiting on the lead', done: 'Report and pre-mortem handed over', at: NOW - 13 * MIN } },
+      },
+      {
+        id: 'a-ui',
+        name: 'redesign',
+        isTeammate: true,
+        phase: 'turn',
+        phaseAt: NOW - 34 * MIN,
+        lastAt: NOW - 5_000,
+        busy: 1,
+        doing: { id: 'call-ui', tool: 'Bash', text: 'Check the demo pages', at: NOW - 5_000, running: true },
+        story: { asks: ['Redesign the settings screen for a first-time user.'], askedAt: NOW - 34 * MIN, brief: { goal: 'Redesign the settings screen for a first-time user', now: 'Reviewing the demo after the reseed', done: 'Reading view and canvas done', at: NOW - 20_000 } },
+      },
+    ],
+  }
+  const runs: ShellRun[] = [
+    { label: 'Start the app against the demo on port 3418', startedAt: NOW - 23 * MIN, agentId: 'a-ui', state: 'running', progress: '[vite] page reload' },
+    { label: 'Save the fix and run the whole gate again', startedAt: NOW - 3 * MIN, agentId: 'a-ui', state: 'ended', code: 0, endedAt: NOW - 59_000 },
+    { label: 'Start the app with the new config', startedAt: NOW - (10 * 60 + 9) * MIN, state: 'running', progress: '[vite] page reload' },
+  ]
+  const peer = (session: string, name: string, repo: string, intent: string): Peer => ({ session, displayName: name, harness: 'claude-code', place: repo.split('/').pop() ?? '', repo, branch: 'dev', intent, liveness: 'live', lastMs: NOW - 30_000 })
+  return {
+    ...bandOf({ ...STATUS, context: { percent: 17, tokens: 173_000, window: 1_000_000 } }, shared, runs),
+    peers: [
+      peer('p1-0000-cynthia', 'Cynthia', '/home/dev/shop', 'Settle invoice expectations'),
+      peer('p2-0000-meredith', 'Meredith', '/home/dev/shop', 'Fix the demo emails and links'),
+      peer('p3-0000-arnold', 'Arnold', '/home/dev', ''),
+      peer('p4-0000-vesper', 'Vesper', GIT.root, 'Sync the docs with the new options'),
+    ],
+  }
+}

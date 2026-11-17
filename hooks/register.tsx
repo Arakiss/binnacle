@@ -11,7 +11,7 @@ import { BEAT_MS, shareOf } from '../model/shared'
 import * as st from '../model/story'
 import { shellAdded, shellFrom, shellStopped, SHELLS_MAX } from '../model/shells'
 import { ciFrom, gitFrom, loopsFrom, observed, offsetFrom, peersFrom, prFrom, remember } from '../model/signals'
-import { bandLines, budgetNotices, MAIN, noticesOf, PALETTE, THEME, type Action, type GaugePart, type Live, type SpinnerPart } from '../render/band'
+import { bandLines, budgetNotices, MAIN, noticesOf, PALETTE, THEME, type Action, type GaugePart, type Live, type PeerRows, type SpinnerPart } from '../render/band'
 import { createBandView } from '../render/band-view'
 import { bashRow, resultView } from '../render/bash-row'
 import { gaugeCells } from '../render/gauge'
@@ -48,9 +48,10 @@ const tz = atom({ plugin: 'binnacle', key: 'tz' } as const, 0)
 const wake = atom({ plugin: 'binnacle', key: 'wake' } as const, true)
 const digest = atom({ plugin: 'binnacle', key: 'digest' } as const, true)
 const mates = atom({ plugin: 'binnacle', key: 'mates' } as const, [])
+const peersOpen = atom({ plugin: 'binnacle', key: 'peersOpen' } as const, false)
 
 /** The options the user set in the plugin's settings; `register` reads them on every load. */
-type Settings = { language: string; peersCommand: string[]; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean; bashRows: boolean }
+type Settings = { language: string; peersCommand: string[]; peerRows: PeerRows; watchCodexLoops: boolean; hideModeHint: boolean; pinStatusLine: boolean; bashRows: boolean }
 
 /** A language name safe to read as a file under i18n/: "en", "es", "pt-BR". */
 const LANGUAGE_NAME = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/
@@ -59,10 +60,13 @@ const LANGUAGE_NAME = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/
 export function settingsOf(options: PluginOptions | undefined): Settings {
   const text = (key: string) => (typeof options?.[key] === 'string' ? (options[key] as string).trim() : '')
   const chosen = text('language')
+  const rows = text('peerRows')
   return {
     language: LANGUAGE_NAME.test(chosen) ? chosen : DEFAULT_LANGUAGE,
     // A command and its arguments split on spaces, run without a shell.
     peersCommand: text('peersCommand').split(/\s+/).filter(Boolean),
+    // Only the other sessions in this repo get a row unless asked: the rest are a count in the foot.
+    peerRows: rows === 'all' || rows === 'off' ? rows : 'here',
     watchCodexLoops: options?.watchCodexLoops === true,
     hideModeHint: options?.hideModeHint === true,
     // On unless turned off: the summary under the prompt is how binnacle shows with the band off.
@@ -428,6 +432,12 @@ async function togglePane($: Engine): Promise<string> {
   }
   const opened = await $.ui.open({ id: PANE, title: 'binnacle' })
   return opened.isPlaced ? t('command.paneOpened') : t('command.paneWaits')
+}
+
+/** Rows every other session, wherever it works, or folds the ones elsewhere back into the foot's count. */
+async function togglePeers($: Engine): Promise<void> {
+  await update($, peersOpen, isOpen => !isOpen)
+  $.ui.invalidate('ui.render')
 }
 
 /** Ends the orphaned codex wrapper loops the HUD reports, after reading them fresh; says how it went. */
@@ -897,6 +907,8 @@ export const register: Register = (on, options) => {
       isWorking: e.props.isWorking,
       mates: await read($, mates),
       live,
+      peerRows: settings.peerRows,
+      peersOpen: await read($, peersOpen),
     }
     isLiveStale = false
     const { bodyColumns, maxRows } = e.props
@@ -917,7 +929,7 @@ export const register: Register = (on, options) => {
       <Client key={`gauge-${part.id}`} module="../render/gauge-client.tsx" props={{ value: part.value, inner: part.inner, colour: part.colour, track: PALETTE.track }} width={gaugeCells(part.inner)} height={1} />
     )
     const Spinner = ({ part }: { part: SpinnerPart }) => <Client key={`spin-${part.id}`} module="../render/spinner-client.tsx" props={{ colour: part.colour }} width={1} height={1} />
-    const onAction = (action: Action) => quietly((action === 'panel' ? togglePane($) : reapLoops($)).then(text => $.ui.toast(text)))
+    const onAction = (action: Action) => quietly(action === 'peers' ? togglePeers($) : (action === 'panel' ? togglePane($) : reapLoops($)).then(text => $.ui.toast(text)))
     const { Band } = createBandView({ Box, Text, Button, Link }, { Gauge, Spinner, onAction })
     return <Band lines={lines.slice(0, maxRows)} columns={bodyColumns} pad={pad} gap={gap} />
   })

@@ -4,6 +4,8 @@
 // while the pointer is on the item. A press item is a plain Button with its hotkey; an item with a
 // link is a Link. Gauges and spinners are the animated surface modules the hooks module mounts,
 // handed in as components so their module paths stay in its source, where the engine reads them.
+// An item with a `scope` is one of a family (an agent and its shells): its words light up while
+// the pointer is on any line of the family, so whose a shell is reads at a touch.
 //
 // The pragma names the factory the engine compiles with anyway, for Bun: run by hand (tools/preview.ts)
 // it ignores the generated tsconfig's `jsxFactory` and would build React elements the stand-ins cannot read.
@@ -29,13 +31,14 @@ export type BandParts = {
 }
 
 export function createBandView({ Box, Text, Button, Link }: BandElements, { Gauge, Spinner, onAction }: BandParts) {
-  const TextRun = ({ part }: { part: TextPart }) => (
-    <Text color={part.color} backgroundColor={part.bg} bold={part.bold === true} italic={part.italic === true}>
+  const TextRun = ({ part, scope }: { part: TextPart; scope?: string }) => (
+    <Text color={part.color} backgroundColor={part.bg} bold={part.bold === true} italic={part.italic === true} {...(scope === undefined ? {} : { hover: { scope, backgroundColor: PALETTE.card } })}>
       {part.t}
     </Text>
   )
 
-  const PartView = ({ part }: { part: Part }) => (part.kind === 'gauge' ? <Gauge part={part} /> : part.kind === 'spinner' ? <Spinner part={part} /> : <TextRun part={part} />)
+  const PartView = ({ part, scope }: { part: Part; scope?: string }) =>
+    part.kind === 'gauge' ? <Gauge part={part} /> : part.kind === 'spinner' ? <Spinner part={part} /> : <TextRun part={part} scope={scope} />
 
   /** The card an item reveals under the pointer: one row on the line's empty row below it. */
   const Card = ({ runs }: { runs: readonly TextPart[] }) => (
@@ -55,7 +58,13 @@ export function createBandView({ Box, Text, Button, Link }: BandElements, { Gaug
   const ItemView = ({ item }: { item: Item }): RenderElement => {
     if (item.press) {
       const { action } = item.press
-      return <Button key={item.key} plain hotkey={item.press.hotkey} label={item.press.label} dimColor onPress={() => onAction(action)} />
+      const button = <Button key={item.key} plain hotkey={item.press.hotkey} label={item.press.label} dimColor onPress={() => onAction(action)} />
+      if (!item.card) return button
+      return (
+        <Box key={`${item.key}-scope`} flexDirection="row" flexShrink={0}>
+          {[button, <Card runs={item.card} />]}
+        </Box>
+      )
     }
     if (item.href) {
       return (
@@ -66,7 +75,7 @@ export function createBandView({ Box, Text, Button, Link }: BandElements, { Gaug
     }
     return (
       <Box key={item.key} flexDirection="row" flexShrink={0}>
-        {[...item.parts.map(part => <PartView part={part} />), ...(item.card ? [<Card runs={item.card} />] : [])]}
+        {[...item.parts.map(part => <PartView part={part} scope={item.scope} />), ...(item.card ? [<Card runs={item.card} />] : [])]}
       </Box>
     )
   }

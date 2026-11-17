@@ -18,6 +18,7 @@ describe('the other sessions that run binnacle', () => {
       seenAt: NOW - 5000,
       agents: 2,
       goal: MAIN_STORY.brief?.goal,
+      root: GIT.root,
       repo: GIT.repo,
       branch: GIT.branch,
       turnStartedAt: TOLD.turn?.startedAt,

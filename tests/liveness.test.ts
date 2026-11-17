@@ -40,7 +40,7 @@ describe('an idle agent', () => {
 
   test('waits on whoever it wrote to until they answer; an answer it left unanswered is a stall', () => {
     const asked = { ...idle, sentAt: NOW - 2 * MIN, sentTo: 'team-lead', heardAt: NOW - 10 * MIN }
-    expect(verdictOf(asked, [], NOW)).toEqual(expect.objectContaining({ state: 'waiting', why: 'waits on team-lead' }))
+    expect(verdictOf(asked, [], NOW)).toEqual(expect.objectContaining({ state: 'waiting', why: 'waits for your answer' }))
     const answered = { ...asked, heardAt: NOW - MIN }
     expect(verdictOf(answered, [], NOW)).toEqual(expect.objectContaining({ state: 'stalled', why: 'got a message and went idle without answering' }))
   })

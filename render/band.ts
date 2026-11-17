@@ -15,7 +15,7 @@
 import { t, tn } from '../i18n'
 import { alertsOf, type Alert } from '../model/alerts'
 import { isSame, matesShown } from '../model/fleet'
-import type { Liveness } from '../model/liveness'
+import { isLead, type Liveness } from '../model/liveness'
 import { STALL_MS } from '../model/activity'
 import { RECENT_MS, type ShellRun } from '../model/shells'
 import { isWorking, peerWords, untilFull } from '../model/signals'
@@ -92,7 +92,17 @@ export type BandInput = {
   mates?: readonly Mate[]
   /** What each loop thinks at this moment, by loop: `main`, or an agent's id. */
   live?: Readonly<Record<string, Live>>
+  /** Which other sessions get a row: the ones in this repo (the default), all of them, or none. */
+  peerRows?: PeerRows
+  /** The person pressed for every other session: each gets a row, wherever it works. */
+  peersOpen?: boolean
 }
+
+/**
+ * Which other sessions the band rows. Another session's work is rarely this session's business:
+ * one in the same repo may collide with it, one elsewhere is a count in the foot until asked for.
+ */
+export type PeerRows = 'here' | 'all' | 'off'
 
 /** The tail of the thinking a loop streams now; gone when its step ends. */
 export type Live = { thinking?: string }
@@ -108,13 +118,14 @@ export type SpinnerPart = { kind: 'spinner'; id: string; colour: string }
 export type Part = TextPart | GaugePart | SpinnerPart
 
 /** What a band button does; the hook runs it. */
-export type Action = 'panel' | 'reap'
+export type Action = 'panel' | 'reap' | 'peers'
 
 /**
  * One item of a line: its parts in a row, and at most one of a card revealed under the pointer, a
- * press (a hotkey while the band holds the focus, or a click), or a link.
+ * press (a hotkey while the band holds the focus, or a click), or a link. `scope` names the family
+ * the item belongs to (an agent and its shells): the pointer on any of them lights them all.
  */
-export type Item = { key: string; parts: Part[]; card?: TextPart[]; press?: { hotkey: string; label: string; action: Action }; href?: string }
+export type Item = { key: string; parts: Part[]; card?: TextPart[]; press?: { hotkey: string; label: string; action: Action }; href?: string; scope?: string }
 
 /** A line; `tight` sits it right under the one before, with no row of air between. */
 export type BandLine = { left: Item[]; right: Item[]; tight?: true }
@@ -396,7 +407,8 @@ function footLine(input: BandInput, shared: Shared, w: number, withSession: bool
   const crowd = shared.crowd ?? 0
   const usd = input.snapshot?.usd
   const isPaid = (input.snapshot?.limits.length ?? 0) === 0 && usd !== undefined && usd > 0
-  // Detail gives way in order: the other sessions here, the context's token count, the reset
+  const elsewhere = peerRowsOf(input).elsewhere
+  // Detail gives way in order: the other sessions here and the words of the count of those elsewhere, the context's token count, the reset
   // times, the gauges' length, the effort in the pill, the gauges, the checks, the branch's length
   // and sync, the pill, the repo's name, the buttons.
   return fitted(
@@ -415,8 +427,9 @@ function footLine(input: BandInput, shared: Shared, w: number, withSession: bool
           ...(crowd > 0 && level < 1 ? [{ key: 'crowd', parts: [dim(t('band.crowd', { n: crowd }))], card: [dim(t('band.crowd.card'))] }] : []),
           ...(level < 9
             ? [
+                ...(elsewhere.length > 0 ? [elsewhereItem(elsewhere, input.peersOpen === true, level > 0)] : []),
                 ...(loops > 0 ? [{ key: 'reap', parts: [], press: { hotkey: 'r', label: t('band.reap', { n: loops }), action: 'reap' as const } }] : []),
-                { key: 'panel', parts: [], press: { hotkey: 'p', label: 'panel', action: 'panel' as const } },
+                { key: 'panel', parts: [], press: { hotkey: 'p', label: t('band.panel'), action: 'panel' as const } },
               ]
             : []),
         ],
@@ -425,6 +438,20 @@ function footLine(input: BandInput, shared: Shared, w: number, withSession: bool
     10,
     w,
   )
+}
+
+/**
+ * The other sessions at work outside this repo, as one button: how many, who under the pointer, and
+ * a press that rows them all (and a second that folds them back).
+ */
+function elsewhereItem(rows: readonly Row[], isOpen: boolean, isShort: boolean): Item {
+  const count = tn(isShort ? 'band.elsewhere.short' : 'band.elsewhere', rows.length)
+  return {
+    key: 'elsewhere',
+    parts: [],
+    press: { hotkey: 'o', label: isOpen ? t('band.elsewhere.hide') : count, action: 'peers' },
+    card: [dim(rows.map(row => `${row.who} · ${row.where ?? '?'}`).join('  ·  '))],
+  }
 }
 
 // ── The heading: what this session is about, what it does now, what it has so far ─────────────
@@ -510,11 +537,12 @@ export function mainLines(input: BandInput, shared: Shared, w: number): BandLine
   const brief = briefOf(story)
   const stalled = tallyOf(judged(shared.agents, input.runs, now)).stalled
   const loud = stalled > 0 ? [text(`${SIGN.stalled} ${tn('count.stalled', stalled)}`, PALETTE.red, true)] : []
+  // Between turns, the agents still at work say the session is not done though its own turn is.
+  const busy = turn ? 0 : judged(shared.agents, input.runs, now).filter(j => j.verdict.state === 'working').length
+  const crew = busy > 0 ? ` · ${tn('main.agentsWorking', busy)}` : ''
   const going = turn
     ? `${t('band.working', { time: compact(now - turn.startedAt) })} · ${tn('count.actions', turn.actions)}`
-    : shared.last
-      ? t('main.ended', { time: compact(now - shared.last.endedAt) })
-      : t('band.idle')
+    : `${shared.last ? t('main.ended', { time: compact(now - shared.last.endedAt) }) : t('band.idle')}${crew}`
   const sign: Part = turn ? { kind: 'spinner', id: 'main', colour: PALETTE.amber } : text('◆', PALETTE.lavender)
   const unasked = turn?.doing ?? (turn?.previous ? t('row.thinkingAfter', { last: turn.previous }) : t('row.thinking'))
   const words = brief?.goal || ask || unasked
@@ -533,7 +561,7 @@ export function mainLines(input: BandInput, shared: Shared, w: number): BandLine
     right: state === undefined ? [] : [state],
   }
   if (ask === undefined) return [head]
-  const labels = [turn ? t('main.now') : t('main.result'), t('main.soFar')]
+  const labels = [turn ? t('main.now') : t('main.result'), turn ? t('main.soFar') : t('main.done')]
   const labelW = Math.max(...labels.map(label => [...label].length))
   const trail = trailWords(story.trail)
   if (turn) {
@@ -549,7 +577,8 @@ export function mainLines(input: BandInput, shared: Shared, w: number): BandLine
   return [
     head,
     ...(result === '' ? [] : [labelled('result', 1, labels[0] ?? '', labelW, [text(result)], w)]),
-    ...(done === '' ? [] : [labelled('so-far', 2, labels[1] ?? '', labelW, [text(done, PALETTE.green), ...(trail === '' ? [] : [dim(`  ${trail}`)])], w)]),
+    // Once the turn is over, what it achieved is the news; how many calls it took is not.
+    ...(done === '' ? [] : [labelled('so-far', 2, labels[1] ?? '', labelW, [text(done, PALETTE.green)], w)]),
   ]
 }
 
@@ -594,8 +623,13 @@ function alertsLine(input: BandInput, shared: Shared, w: number): BandLine {
 /** The most rows the band gives to its rows; past it, the rest are counted on one more row. */
 export const DETAIL_ROWS = 10
 
-/** What opens a row's second line, under its name. */
+/** What opens a row's second line, under its name: the end of its family, or a stem its shells hang from. */
 const DETAIL_LEAD = '  ╰ '
+const DETAIL_STEM = '  │ '
+
+/** What opens a shell's row under the agent that started it: a branch, the last one a corner. */
+const BRANCH_MID = '  ├ '
+const BRANCH_END = '  └ '
 
 /** The widest the who and the state columns grow. */
 const WHO_MAX = 22
@@ -619,6 +653,12 @@ type Row = {
   card: TextPart[]
   /** A second line under the row, drawn while the band has rows to spare: its goal and what it has so far. */
   detail?: TextPart[]
+  /** The row this one hangs under, by key: a shell under the agent that started it. */
+  parent?: string
+  /** An answer the person owes: the row is this one line, drawn first and apart from the rest. */
+  headline?: TextPart[]
+  /** Where another session works, for the foot's card. */
+  where?: string
 }
 
 /** "Bash · Ejecutar los tests": a call as the agent described it, the tool first. */
@@ -628,10 +668,12 @@ function callWords(tool: string, words: string): string {
 }
 
 /**
- * Ranks, most urgent first: a stall; an unknown; a failed shell, an owed answer or a silent turn;
- * the work (agents, workflows); running shells; waits; what ended; other sessions.
+ * Ranks, most urgent first: an answer owed to the person; a stall; an unknown; a failed shell, an
+ * owed answer between agents or a silent turn; the work (agents, workflows); running shells;
+ * waits; what ended; other sessions.
  */
 const RANK: Record<Liveness, number> = { stalled: 0, unknown: 1, working: 3, waiting: 5, done: 8 }
+const OWED_TO_YOU = -1
 
 function agentRow(j: Judged, now: number, live?: Live): Row {
   const { agent: a, verdict: v } = j
@@ -651,14 +693,17 @@ function agentRow(j: Judged, now: number, live?: Live): Row {
   const since = v.state === 'working' && doing?.running ? doing.at : v.since
   // The two quiet troubles: an answer owed this long, a turn this silent.
   const isOwed = v.state === 'waiting' && v.wakers.some(w => w.kind === 'reply') && now - (a.sentAt ?? now) >= STALL_MS
+  const isOwedToYou = isOwed && isLead(a.sentTo)
   const isSilent = v.state === 'working' && a.busy === 0 && now - a.lastAt >= STALL_MS
-  const state = isSilent ? t('row.silent', { time: compact(now - a.lastAt) }) : `${word(v.state)} ${compact(now - (isOwed ? (a.sentAt ?? since) : since))}`
+  const owedFor = compact(now - (a.sentAt ?? since))
+  const state = isSilent ? t('row.silent', { time: compact(now - a.lastAt) }) : `${word(v.state)} ${isOwed ? owedFor : compact(now - since)}`
   const trail = trailWords(story?.trail)
-  const detail = [goal, brief?.done ? t('row.soFar', { done: brief.done }) : '', trail].filter(Boolean).join(' · ')
+  // A teammate's goal is already in the engine's own list of teammates under the prompt.
+  const detail = [a.isTeammate ? '' : goal, brief?.done ? t('row.soFar', { done: brief.done }) : '', trail].filter(Boolean).join(' · ')
   return {
     key: `agent-${id}`,
     kind: 'agent',
-    rank: isOwed || isSilent ? 2 : RANK[v.state],
+    rank: isOwedToYou ? OWED_TO_YOU : isOwed || isSilent ? 2 : RANK[v.state],
     sign: v.state === 'working' ? { kind: 'spinner', id: `agent-${id}`, colour: PALETTE.lavender } : text(SIGN[v.state], LIVE_COLOUR[v.state]),
     who: a.name,
     whoColour: v.state === 'working' ? PALETTE.text : v.state === 'waiting' ? PALETTE.lavender : LIVE_COLOUR[v.state],
@@ -668,6 +713,16 @@ function agentRow(j: Judged, now: number, live?: Live): Row {
     // Under the pointer: the task it was given, whole, then how it stands and its call.
     card: [dim(`${ask === undefined ? '' : `${t('main.asked', { ask })} · `}${a.name} · ${word(v.state)} ${compact(now - v.since)} · ${v.why}${doing ? ` · ${t(doing.running ? 'row.now' : 'row.last', { call: callWords(doing.tool, doing.text) })}` : ''}`)],
     ...(detail === '' ? {} : { detail: [dim(detail)] }),
+    ...(isOwedToYou
+      ? {
+          headline: [
+            text('▲ ', PALETTE.amber),
+            text(a.name, PALETTE.amber, true),
+            text(` ${t('row.owedYou', { time: owedFor })}`, PALETTE.amber),
+            ...(brief?.done ? [dim(`   ${brief.done}`)] : goal === '' ? [] : [dim(`   ${goal}`)]),
+          ],
+        }
+      : {}),
   }
 }
 
@@ -702,10 +757,11 @@ function mateRow(mate: Mate, peer: Peer | undefined, now: number): Row {
     sign: isWorking ? { kind: 'spinner', id: `peer-${mate.session}`, colour: PALETTE.cyan } : text('◆', PALETTE.cyan),
     who: peer === undefined ? (mate.repo ?? t('peer.session')) : peerWords(peer).name,
     whoColour: PALETTE.cyan,
-    state: isWorking ? `${word('working')} ${compact(now - (mate.turnStartedAt ?? now))}` : mate.endedAt === undefined ? t('band.idle') : t('main.ended', { time: compact(now - mate.endedAt) }),
+    state: isWorking ? `${word('working')} ${compact(now - (mate.turnStartedAt ?? now))}` : mate.endedAt === undefined ? t('band.idle') : t('peer.ended', { time: compact(now - mate.endedAt) }),
     stateColour: PALETTE.dim,
     what: [...(peer !== undefined && mate.repo ? [dim(`${mate.repo} · `)] : []), text(mate.goal ?? ''), ...(tail ? [text(`  ${isWorking ? CALL_MARK : SIGN.done} `, isWorking ? PALETTE.cyan : PALETTE.green), dim(tail)] : [])],
     card: [dim([where, mate.agents > 0 ? tn('count.agents', mate.agents) : ''].filter(Boolean).join(' · ') || t('peer.session'))],
+    where: mate.repo ?? '?',
   }
 }
 
@@ -742,9 +798,12 @@ function workflowRow(runId: string, list: readonly Judged[], name: string | unde
 /** A shell's output this long unchanged reads as silent: a watcher that may be stuck. */
 export const SHELL_QUIET_MS = 10 * 60_000
 
-/** One row per shell, or per set of running shells with the same owner and label (`count` of them). */
-function shellRow(run: ShellRun, i: number, owner: string, now: number, count = 1): Row | null {
-  const base = { key: `shell-${i}`, kind: 'shell' as const, who: owner, whoColour: PALETTE.dim, what: [text(run.label)], card: [dim(`${owner} · ${run.label}`)] }
+/**
+ * One row per shell, or per set of running shells with the same owner and label (`count` of them).
+ * Under its agent's row (`parent`) the branch says whose it is; on its own, `owner` names it.
+ */
+function shellRow(run: ShellRun, i: number, owner: string, now: number, count = 1, parent?: string): Row | null {
+  const base = { key: `shell-${i}`, kind: 'shell' as const, who: owner, whoColour: PALETTE.dim, what: [text(run.label)], card: [dim(`${owner} · ${run.label}`)], ...(parent === undefined ? {} : { parent }) }
   if (run.state === 'running') {
     const quiet = run.quietSince === undefined ? 0 : now - run.quietSince
     const isQuiet = quiet >= SHELL_QUIET_MS
@@ -779,14 +838,44 @@ function peerRow(peer: Peer, now: number): Row {
     sign: text('◆', PALETTE.cyan),
     who: name,
     whoColour: PALETTE.cyan,
-    state: `${where} ${compact(now - peer.lastMs)}`,
+    state: word('working'),
     stateColour: PALETTE.dim,
-    what: mission === '' ? [dim(t('row.noIntent'))] : [text(mission)],
+    what: [dim(`${where} · `), ...(mission === '' ? [dim(t('row.noIntent'))] : [text(mission)])],
     card: [dim(`${t('row.peerCard', { harness: peer.harness, repo: peer.repo })}${peer.branch ? ` · ${peer.branch}` : ''} · ${t('row.peerLastSignal', { time: compact(now - peer.lastMs) })}`)],
+    where,
   }
 }
 
-/** Every row the band could draw, most urgent first; the main loop has the heading, not a row. */
+const lastSegment = (path: string) => path.split('/').filter(Boolean).pop() ?? ''
+
+/**
+ * The other sessions as rows, split by whether they work in this repo (this checkout, a worktree
+ * of it, or a clone of the same name) or elsewhere. None with `peerRows` off.
+ */
+export function peerRowsOf(input: BandInput): { here: Row[]; elsewhere: Row[] } {
+  if (input.peerRows === 'off') return { here: [], elsewhere: [] }
+  const now = input.now
+  const git = input.shared.git
+  const isHere = (root: string | undefined, repo: string | undefined) =>
+    git !== null && git !== undefined && ((root !== undefined && root !== '' && (root === git.root || lastSegment(root) === git.repo)) || (repo !== undefined && repo === git.repo))
+  // A session that runs binnacle tells its own story; the sessions command only names it then.
+  const livePeers = (input.peers ?? []).filter(p => p.liveness === 'live')
+  const mates = matesShown(input.mates ?? [], now)
+  const here: Row[] = []
+  const elsewhere: Row[] = []
+  for (const mate of mates) (isHere(mate.root, mate.repo) ? here : elsewhere).push(mateRow(mate, livePeers.find(p => isSame(p, mate)), now))
+  for (const peer of livePeers) {
+    if (!isWorking(peer) || mates.some(m => isSame(peer, m))) continue
+    ;(isHere(peer.repo, undefined) ? here : elsewhere).push(peerRow(peer, now))
+  }
+  return { here, elsewhere }
+}
+
+/**
+ * Every row the band could draw, most urgent first, each shell right under the agent that started
+ * it; the main loop has the heading, not a row. A family ranks as its most urgent member, so a
+ * failed shell lifts the agent it belongs to.
+ */
 export function rowsOf(input: BandInput, shared: Shared): Row[] {
   const now = input.now
   const agents = judged(shared.agents, input.runs, now)
@@ -800,6 +889,8 @@ export function rowsOf(input: BandInput, shared: Shared): Row[] {
   }
   const grouped = new Set([...groups.values()].filter(list => list.length > 1).flat())
   const workflows = [...groups.entries()].filter(([, list]) => list.length > 1).map(([runId, list]) => workflowRow(runId, list, shared.workflows?.[runId], now))
+  const agentRows = agents.filter(j => !grouped.has(j)).map(j => agentRow(j, now, j.agent.id === undefined ? undefined : input.live?.[j.agent.id]))
+  const parents = new Set(agentRows.map(row => row.key))
   // Running shells with the same owner and label are one row with their count: a relaunch that left the first behind.
   const seen = new Map<string, number>()
   const runs = ordered(input.runs)
@@ -809,17 +900,23 @@ export function rowsOf(input: BandInput, shared: Shared): Row[] {
     const same = `${run.agentId ?? ''}\u0000${run.label}`
     if (run.state === 'running' && drawn.has(same)) return []
     if (run.state === 'running') drawn.add(same)
-    const row = shellRow(run, i, run.agentId === undefined ? t('who.main') : (names.get(run.agentId) ?? t('who.agent')), now, run.state === 'running' ? (seen.get(same) ?? 1) : 1)
+    const parent = run.agentId === undefined ? undefined : `agent-${run.agentId}`
+    const owner = run.agentId === undefined ? t('who.main') : (names.get(run.agentId) ?? t('who.agent'))
+    const row = shellRow(run, i, owner, now, run.state === 'running' ? (seen.get(same) ?? 1) : 1, parent !== undefined && parents.has(parent) ? parent : undefined)
     return row === null ? [] : [row]
   })
-  // A session that runs binnacle tells its own story; the sessions command only names it then.
-  const livePeers = (input.peers ?? []).filter(p => p.liveness === 'live')
-  const mates = matesShown(input.mates ?? [], now)
-  const peers = [...mates.map(m => mateRow(m, livePeers.find(p => isSame(p, m)), now)), ...livePeers.filter(p => isWorking(p) && !mates.some(m => isSame(p, m))).map(p => peerRow(p, now))]
+  const { here, elsewhere } = peerRowsOf(input)
+  const peers = input.peersOpen === true || input.peerRows === 'all' ? [...here, ...elsewhere] : here
   const finished = (shared.finished ?? []).map(f => finishedRow(f, now))
-  const rows = [...agents.filter(j => !grouped.has(j)).map(j => agentRow(j, now, j.agent.id === undefined ? undefined : input.live?.[j.agent.id])), ...workflows, ...shells, ...peers, ...finished]
+  const rows = [...agentRows, ...workflows, ...shells, ...peers, ...finished]
+  const children = (key: string) => rows.filter(row => row.parent === key)
+  const rankOf = (row: Row) => Math.min(row.rank, ...children(row.key).map(child => child.rank))
   // A stable sort: within a rank, agents in the order they started, then workflows, shells newest first, sessions.
-  return rows.map((row, i) => ({ row, i })).sort((x, y) => x.row.rank - y.row.rank || x.i - y.i).map(({ row }) => row)
+  return rows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => row.parent === undefined)
+    .sort((x, y) => rankOf(x.row) - rankOf(y.row) || x.i - y.i)
+    .flatMap(({ row }) => [row, ...children(row.key)])
 }
 
 /** `parts` cut to `room` cells: whole while they fit, the one that overflows cut at a word, the rest dropped. */
@@ -862,6 +959,30 @@ function rowItem(row: Row, whoW: number, stateW: number, w: number): Item {
   }
 }
 
+/**
+ * A shell under its agent: the branch, its sign, how it stands, and what it is for, which starts in
+ * the column where its agent's words do. Its owner goes unsaid: the branch says it.
+ */
+function childItem(row: Row, isLast: boolean, whoW: number, stateW: number, w: number): Item {
+  const lead = isLast ? BRANCH_END : BRANCH_MID
+  const before = [...lead].length + partCells(row.sign) + 1
+  // The agent's words start after its sign, a space, who, two spaces, the state and two spaces.
+  const stateCol = Math.max([...row.state].length, 1 + 1 + whoW + 2 + stateW - before)
+  const room = w - before - stateCol - 2
+  const what = room >= 8 ? cutParts(row.what, room) : []
+  return {
+    key: row.key,
+    parts: [
+      text(lead, PALETTE.track),
+      row.sign,
+      text(' '),
+      text(what.length > 0 ? row.state.padEnd(stateCol) : cutWords(row.state, Math.max(4, w - before)), row.stateColour),
+      ...(what.length > 0 ? [text('  '), ...what] : []),
+    ],
+    card: row.card,
+  }
+}
+
 /** What the hidden rows were: "1 agent, 4 shells, 2 sessions, main". */
 function hiddenWords(hidden: readonly Row[]): string {
   const n = (kind: Row['kind']) => hidden.filter(r => r.kind === kind).length
@@ -878,12 +999,14 @@ function hiddenWords(hidden: readonly Row[]): string {
 
 /**
  * The rows for `room` lines at most, columns aligned; past the room (or DETAIL_ROWS), the least
- * urgent go and one row counts them. Every row but the first sits tight. With lines to spare for
- * all of them, each row that has a second line (an agent's goal and what it has so far) gets it.
+ * urgent go and one row counts them. Every row but the first sits tight, save the one after an
+ * answer owed to the person, which stands apart. With lines to spare for all of them, each row
+ * that has a second line (an agent's goal and what it has so far) gets it, before its shells.
  *
- * This session's rows and other sessions' rows read alike at a glance, so when both share the
- * band, one dim title line sits before the first other session; it takes one of the rows, and is
- * left out when no other session's row would show anyway.
+ * A family (an agent and its shells) shares a hover scope: the pointer on any of its lines lights
+ * all of them. Other sessions read unlike this session's work, so when both share the band, one
+ * dim title line sits before the first other session; it takes one of the rows, and is left out
+ * when no other session's row would show anyway.
  */
 export function detailLines(input: BandInput, shared: Shared, w: number, room: number): BandLine[] {
   const rows = rowsOf(input, shared)
@@ -895,25 +1018,41 @@ export function detailLines(input: BandInput, shared: Shared, w: number, room: n
   const isTitled = isMixed && most > 2 && (hasPeer(take(most - 1)) || hasPeer(take(most)))
   const shown = take(isTitled ? most - 1 : most)
   const hidden = rows.slice(shown.length)
-  const whoW = Math.min(WHO_MAX, Math.max(4, ...shown.map(r => [...r.who].length)))
-  const stateW = Math.min(STATE_MAX, Math.max(...shown.map(r => [...r.state].length)))
+  // The columns are the top rows' own: a shell under its agent and a headline lay their own way.
+  const columned = shown.filter(r => r.parent === undefined && r.headline === undefined)
+  const whoW = Math.min(WHO_MAX, Math.max(4, ...columned.map(r => [...r.who].length)))
+  const stateW = Math.min(STATE_MAX, Math.max(4, ...columned.map(r => [...r.state].length)))
   const taken = shown.length + (isTitled ? 1 : 0)
   const isRoomy = hidden.length === 0 && taken + shown.filter(r => r.detail !== undefined).length <= room
-  const items: Item[] = []
-  for (const row of shown) {
-    if (isTitled && row.kind === 'peer' && !items.some(item => item.key === 'peers-title')) {
+  const scopeOf = (row: Row) => {
+    const family = row.parent ?? row.key
+    return shown.some(r => r.parent === family) ? `family-${family}`.slice(0, 64) : undefined
+  }
+  const items: { item: Item; isApart?: true }[] = []
+  for (const [i, row] of shown.entries()) {
+    if (isTitled && row.kind === 'peer' && !items.some(({ item }) => item.key === 'peers-title')) {
       const title = cutWords(t('row.peersTitle'), Math.max(4, w - 6))
-      items.push({ key: 'peers-title', parts: [text('── ', PALETTE.track), dim(title), text(` ${'─'.repeat(Math.max(0, w - [...title].length - 4))}`, PALETTE.track)] })
+      items.push({ item: { key: 'peers-title', parts: [text('── ', PALETTE.track), dim(title), text(` ${'─'.repeat(Math.max(0, w - [...title].length - 4))}`, PALETTE.track)] } })
     }
-    items.push(rowItem(row, whoW, stateW, w))
-    if (isRoomy && row.detail !== undefined) items.push({ key: `${row.key}-detail`, parts: [dim(DETAIL_LEAD), ...cutParts(row.detail, Math.max(0, w - [...DETAIL_LEAD].length))] })
+    const scope = scopeOf(row)
+    const isAfterHeadline = i > 0 && shown[i - 1]?.headline !== undefined
+    if (row.headline !== undefined) {
+      items.push({ item: { key: row.key, parts: cutParts(row.headline, w), card: row.card }, ...(i > 0 ? { isApart: true as const } : {}) })
+      continue
+    }
+    const item = row.parent === undefined ? rowItem(row, whoW, stateW, w) : childItem(row, shown[i + 1]?.parent !== row.parent, whoW, stateW, w)
+    items.push({ item: { ...item, ...(scope === undefined ? {} : { scope }) }, ...(isAfterHeadline ? { isApart: true as const } : {}) })
+    if (isRoomy && row.detail !== undefined) {
+      const lead = shown[i + 1]?.parent === row.key ? DETAIL_STEM : DETAIL_LEAD
+      items.push({ item: { key: `${row.key}-detail`, parts: [text(lead, PALETTE.track), ...cutParts(row.detail, Math.max(0, w - [...lead].length))], ...(scope === undefined ? {} : { scope }) } })
+    }
   }
   if (hidden.length > 0) {
     const what = hiddenWords(hidden)
     const said = shown.length === 0 ? what : t('row.moreOf', { n: hidden.length, what })
-    items.push({ key: 'more', parts: [dim(cutWords(`${said} · ${t('row.openPanel')}`, w))] })
+    items.push({ item: { key: 'more', parts: [dim(cutWords(`${said} · ${t('row.openPanel')}`, w))] } })
   }
-  return items.map((item, i) => ({ left: [item], right: [], ...(i > 0 ? { tight: true } : {}) }))
+  return items.map(({ item, isApart }, i) => ({ left: [item], right: [], ...(i > 0 && isApart !== true ? { tight: true as const } : {}) }))
 }
 
 /**

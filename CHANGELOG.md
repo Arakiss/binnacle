@@ -5,6 +5,38 @@ Every change a user of binnacle can notice. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); before 1.0.0 a minor version may
 change what the band shows.
 
+## [Unreleased]
+
+Whose work is whose reads at a glance, and other sessions stay out of the way.
+
+### Added
+
+- An answer a teammate has waited on for ten minutes heads the rows on an amber line of its own:
+  "advisor has waited on you for 13m: answer it or close it".
+- A background shell hangs under the agent that started it, on a branch, its words in the column
+  its agent's start in; a failed shell lifts its agent's family. The pointer on any line of a
+  family lights all of them (a hover scope).
+- `peerRows` (`here` by default): only the other sessions in this repo get a row; the rest are a
+  button in the foot, `o: 3 sessions elsewhere`, with who and where under the pointer. Pressing it
+  rows them all; pressing again folds them.
+- Between turns the goal's line counts the agents still working.
+
+### Changed
+
+- The main loop reads `you` («tú»): its shells, the call log, and an agent waiting on it, which
+  "waits for your answer" instead of "waits on team-lead".
+- Between turns the heading says "your turn ended", and its second line reads "done", without the
+  count of calls.
+- Another session's state column says how it stands; where it works opens what it does.
+- A teammate's second line drops its goal, already in Claude Code's own list of teammates.
+- In Spanish a running shell reads «shell», one that ended «acabó», and commands «comandos».
+- The band's panel button follows the language.
+
+### Fixed
+
+- The plugin tests run again on Claude Code 2.1.326, which lays the band in a column of its own
+  beside its own row.
+
 ## [0.5.0] - 2026-11-10
 
 Bash calls read by what they are for, and a message to a busy agent no longer gets lost.

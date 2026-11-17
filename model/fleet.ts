@@ -37,7 +37,7 @@ export function mateFrom(session: string, text: string, seenAt: number): Mate | 
     seenAt,
     agents: shared.agents?.length ?? 0,
     goal,
-    ...(shared.git ? { repo: shared.git.repo, branch: shared.git.branch } : {}),
+    ...(shared.git ? { root: shared.git.root, repo: shared.git.repo, branch: shared.git.branch } : {}),
     ...(isWorking ? { turnStartedAt: shared.turn?.startedAt } : {}),
     ...(shared.last ? { endedAt: shared.last.endedAt } : {}),
     ...(isWorking && now ? { now } : {}),

@@ -64,22 +64,26 @@ The band appears above the prompt in the next session, with nothing to configure
 - **now**: what it is doing at this moment. Beside it, dim, the call that runs right now; with no
   call running, the model's thinking as it streams, in italics.
 - **so far**: what it has achieved or found, in green, then its calls by kind ("9 reads · 2 edits
-  in status.ts").
+  in status.ts"). Between turns it reads **done**, without the calls.
+
+Between turns the goal's line says your turn ended, and how many agents still work: the session
+is not done while they are.
 
 **The rows** are everything else that works for you, most urgent first:
 
 | Row | What it says |
 |---|---|
-| An agent | How it stands (working, waiting, stalled, unknown) and since when, then what it is on, in words. With rows to spare, a second line with its goal and what it has so far. |
+| An answer owed to you | A teammate that has waited ten minutes on your answer heads the rows, in amber, on a line of its own: who, since when, and what it handed over. |
+| An agent | How it stands (working, waiting, stalled, unknown) and since when, then what it is on, in words. With rows to spare, a second line with what it has so far (and, for a subagent, its goal; a teammate's is in Claude Code's own list). |
 | An agent that just reported | Stays three minutes with how its report opens, so a result does not vanish with its row. |
 | A workflow | Its agents share one row under the workflow's name; one in trouble keeps a row of its own. |
-| A background shell | Its label and age; one whose output stopped changing says since when, one launched twice says so. |
-| Another session | Under its own rule: its goal, and what it does now or how its last turn ended. |
+| A background shell | Under the agent that started it, on a branch, with its age and label; your own shells read `you`. One whose output stopped changing says since when, one launched twice says so, and a failed one lifts its agent above the rest. The pointer on any line of an agent's family lights all of them. |
+| Another session in this repo | Under its own rule: its goal, and what it does now or how its last turn ended. Sessions in other repos are a button in the foot (`o: 3 sessions elsewhere`), with who and where under the pointer; pressing it rows them all, and again folds them. |
 
 **The foot** holds what you check now and then: the model and its effort, the context window and
 each quota as a gauge (amber when you burn it faster than the clock, red with a time when it will
-run out before it resets), the repo and branch, the pull request with its checks, and the band's
-buttons.
+run out before it resets), the repo and branch, the pull request with its checks, the count of
+sessions in other repos, and the band's buttons.
 
 Between turns the heading keeps the goal and says how the last turn ended, so a terminal you come
 back to tells you what it was doing and where it left off:
@@ -153,6 +157,7 @@ Set them in the plugin's settings (`/plugin`, then binnacle):
 |---|---|---|
 | `language` | `en` | The language binnacle speaks: `en`, `es`, or any dictionary you add. Left alone, it follows Claude Code's own `language` setting when binnacle has that dictionary |
 | `peersCommand` | empty | A command that lists sessions of other harnesses, or names yours |
+| `peerRows` | `here` | Which other sessions get a row: `here`, the ones in this repo (a worktree of it counts), the rest a count in the foot; `all`; or `off` |
 | `watchCodexLoops` | off | Flags Codex app-server wrapper loops left behind by Zentty and offers to end them |
 | `hideModeHint` | off | Drops the permission-mode reminder from the hint under the prompt |
 | `pinStatusLine` | on | With the band off, pins a one-line summary under the prompt |
@@ -194,7 +199,8 @@ Only `session` is required. A session is named by its `display_name`; without on
 an `intent` opens with (a capitalised word and a colon); without either, by its harness and the
 last four characters of its id. Sessions with `liveness: "live"` get a row unless `idle` is
 true, which marks a live session that waits rather than works; a `lifecycle` other than `active`
-is left out. A session the command lists that also runs binnacle gets one row: the
+is left out. With `peerRows` at its default, only the sessions whose `repo` is this checkout, or
+a folder of the same name, get a row; the rest are counted in the foot. A session the command lists that also runs binnacle gets one row: the
 command names it, its own state file tells its story. The command runs without a shell, split on
 spaces, every ten seconds.
 

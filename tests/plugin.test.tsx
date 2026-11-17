@@ -524,14 +524,14 @@ describe('the band above the prompt', () => {
     const all = await rows(drawn)
     const [alert, ...rest] = all.slice(0, -1)
     const foot = all.at(-1)
-    // One line for all of it: at 160 columns the context's token count and the count of sessions here give way first.
-    for (const part of ['✳ Opus 5.5', 'ctx', '34%', '5h', '62% ↻ 2h', '7d', '9%']) expect(foot).toContain(part)
-    expect(foot).toMatch(/ {3}session 1h {3}acme \ue0a0 main ●2 ↑2 {3}#41 ✗ \d\/\d {3}r: reap 2 {3}p: panel$/)
+    // One line for all of it: at 160 columns the context's token count, the count of sessions here and the reset times give way.
+    for (const part of ['✳ Opus 5.5', 'ctx', '34%', '5h', '62%', '7d', '9%']) expect(foot).toContain(part)
+    expect(foot).toMatch(/ {3}session 1h {3}acme \ue0a0 main ●2 ↑2 {3}#41 ✗ \d\/\d {3}o: 1 elsewhere {3}r: reap 2 {3}p: panel$/)
     expect(alert).toMatch(/^⚠ CI failing/)
-    // Each live session elsewhere on the bus gets a row: its name, where it works, what it says it does.
-    expect(rest).toHaveLength(2)
-    expect(rest[0]).toMatch(/^◆ codex ther +acme \S+ +no stated intent/)
-    expect(rest[1]).toMatch(/^◆ session here +other \S+ +no stated intent/)
+    // The live session in this repo gets a row: its name, how it stands, where it works, what it says it does.
+    // The one in another repo is the foot's count.
+    expect(rest).toHaveLength(1)
+    expect(rest[0]).toMatch(/^◆ codex ther +working +acme · no stated intent/)
 
     // The model's pill is ink on lavender, the branch blue, the gauges animated surface modules; nothing fades.
     expect((await drawn.find({ type: 'Text', text: / ✳ Opus 5\.5 / }))?.props).toEqual(expect.objectContaining({ color: '#1a1b26', backgroundColor: '#bb9af7', bold: true }))
@@ -609,7 +609,7 @@ describe('the band above the prompt', () => {
     await clock.advance(2_000)
 
     const drawn = await $.ui.mount(band())
-    expect((await rows(drawn)).some(line => /⠋ main +shell 2s +Dev server/.test(line))).toBe(true)
+    expect((await rows(drawn)).some(line => /⠋ you +shell 2s +Dev server/.test(line))).toBe(true)
     await drawn.unmount()
 
     const hint = await $.ui.mount({ plugin: 'binnacle', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: '? for shortcuts · 1 active shell' } })
@@ -753,7 +753,7 @@ describe('what the session is about', () => {
     await clock.advance(10_000)
     expect(asked).toHaveLength(2)
     expect(JSON.parse(asked[1]?.prompt ?? '{}').main).toEqual(expect.objectContaining({ state: 'idle', ended: 'Fixed: the cut now counts separators.', previous: READING.main }))
-    expect((await lines($, false))[0]).toMatch(/^◆ Stop the overflow at 70 columns +ended \d+s ago$/)
+    expect((await lines($, false))[0]).toMatch(/^◆ Stop the overflow at 70 columns +your turn ended \d+s ago$/)
   })
 
   test('/binnacle digest off asks no model: the band keeps the request and the loop\'s own words', { options: OPTIONS }, async ($, on) => {
@@ -832,8 +832,16 @@ describe('what the session is about', () => {
     await clock.advance(10_000)
     // Only the fresh file of another session is read: not this session's own, not one long unwritten.
     expect(read.filter(path => path.includes('/state/'))).toEqual([expect.stringMatching(/\/state\/mate-0199\.json$/)])
-    const drawnLines = await lines($, false)
-    expect(drawnLines.some(line => /^⠋ shop +working \d+\w +Make the cart total survive a reload {2}▸ Writing the session store$/.test(line))).toBe(true)
+    // It works in another repo: a count in the foot until the person presses for every session.
+    const isRow = (line: string) => /^⠋ shop +working \d+\w +Make the cart total survive a reload {2}▸ Writing the session store$/.test(line)
+    const folded = await lines($, false)
+    expect(folded.some(isRow)).toBe(false)
+    // Two elsewhere: this state file's session, and the one the sessions command lists.
+    expect(folded.at(-1)).toContain('o: 2 elsewhere')
+    const drawn = await $.ui.mount(band({ isWorking: false }))
+    await drawn.press({ key: 'elsewhere' })
+    expect((await lines($, false)).some(isRow)).toBe(true)
+    await drawn.unmount()
   })
 })
 

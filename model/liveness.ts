@@ -48,6 +48,12 @@ export function hasQueued(agent: { queuedAt?: number; heardAt?: number }): boole
 /** What the sender reads after a SendMessage to an agent in the middle of a turn. */
 export const queuedNote = (name: string): string => t('nudge.queued', { name })
 
+/**
+ * The names a teammate's message to the main loop goes by: the engine's `team-lead`, or `main`.
+ * The person reads the main loop as themself, so an answer owed to it is owed to them.
+ */
+export const isLead = (to: string | undefined): boolean => to === 'team-lead' || to === 'main'
+
 /** Why a TaskStop of an agent with a message still queued is refused, once. */
 export const stopRefusal = (name: string, queuedAt: number, now: number): string =>
   t('nudge.stopQueued', { name, time: duration(now - queuedAt) })
@@ -58,7 +64,7 @@ export function wakersOf(agent: Agent, runs: readonly ShellRun[], now: number): 
   if (agent.status === 'waiting') out.push({ kind: 'engine', wakes: true, why: t('why.heldByEngine') })
   if (hasQueued(agent)) out.push({ kind: 'inbox', wakes: true, why: t('why.queued') })
   if (agent.sentAt !== undefined && agent.sentAt > (agent.heardAt ?? -Infinity)) {
-    out.push({ kind: 'reply', wakes: true, why: t('why.waitsOn', { who: agent.sentTo ?? '?' }) })
+    out.push({ kind: 'reply', wakes: true, why: isLead(agent.sentTo) ? t('why.waitsOnYou') : t('why.waitsOn', { who: agent.sentTo ?? '?' }) })
   }
   for (const m of agent.monitors ?? []) {
     if (m.until === undefined || m.until > now) out.push({ kind: 'monitor', wakes: true, why: t('why.monitorArmed') })
